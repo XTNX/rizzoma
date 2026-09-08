@@ -1,0 +1,19 @@
+{
+  "name": "rizzoma-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Референс-бэкенд Telegram Mini App RIZZOMA: диплинки, реферальный граф, секция «Свои»",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "grammy": "^1.30.0"
+  }
+}

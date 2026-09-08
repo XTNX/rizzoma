@@ -1,0 +1,21 @@
+# СЕКРЕТЫ — никогда не в репозиторий.
+# BOT_TOKEN даёт полный контроль над ботом: утёк — бота угнали.
+# Токен живёт только в переменных окружения хостинга бэкенда.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# зависимости и мусор сборки
+node_modules/
+npm-debug.log*
+package-lock.json
+dist/
+.DS_Store
+Thumbs.db
+
+# рабочие материалы: в приложении не участвуют, публиковать незачем
+references/
+landing-prompt.md
+scripts/
