@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RIZZOMA — корневая сеть</title>
+<meta name="description" content="RIZZOMA — объединение из Санкт-Петербурга: electronic / techno / witchhouse / idm. Ближайшее событие — VIDEO LOUNGE, 12 сентября 2026, Грузинская ул., 3к1Б. 18+">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<meta property="og:title" content="RIZZOMA // VIDEO LOUNGE">
+<meta property="og:description" content="12 сентября 2026, 22:00 · Санкт-Петербург, Грузинская ул., 3к1Б · OPEN-AIR, 7 артистов, маркет, тату. 18+">
+<meta property="og:image" content="logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@200;300;400;500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#08080A">
+<!-- Telegram Mini App SDK. Вне Telegram скрипт безвреден: WebApp.platform === 'unknown',
+     сайт работает как обычный лендинг. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Конфигурация деплоя (бот, short name приложения, бэкенд). Правится без пересборки. -->
+<script src="config.js"></script>
+<style>
+/* ============================================================
+   RIZZOMA — design tokens
+   Школа: Motion / Experimental (field-io × active-theory)
+   + авторский слой «нео-трайбл + фракталы»
+   ============================================================ */
+:root{
+  --bg:#08080A;
+  --bg-raised:#111114;
+  --bg-sunken:#050506;
+  --ink:#F2F1EC;
+  --ink-muted:#8B8B93;
+  --accent-primary:#7B2FF7;
+  --accent-secondary:#FF2E4D;
+  --accent-toxic:#B6FF3C;
+  --line:rgba(242,241,236,0.08);
+  --line-strong:rgba(242,241,236,0.18);
+
+  /* производные оттенки сети — oklch, чтобы промежуточные ступени
+     генерировались в одном цветовом пространстве (advanced-patterns#color-system) */
+  --node-cold:oklch(0.52 0.24 300);
+  --node-warm:oklch(0.72 0.20 300);
+  --node-hot:oklch(0.90 0.19 128);
+
+  --f-display:'Space Grotesk','Space Grotesk Fallback',sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,monospace;
+  --f-body:'Sora',sans-serif;
+
+  /* 8pt-сетка */
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px; --s5:48px; --s6:64px; --s7:96px; --s8:144px;
+  --pad:clamp(20px,5vw,72px);
+  --maxw:1440px;
+
+  --ease:cubic-bezier(0.83,0,0.17,1);
+  --ease-out:cubic-bezier(0.16,1,0.3,1);
+  --t-fast:200ms; --t-mid:520ms; --t-slow:900ms;
+
+  --radius:0px;
+
+  /* Telegram Mini App: заполняются из WebApp.safeAreaInset / viewportStableHeight */
+  --tg-top:0px; --tg-bottom:0px; --tg-vh:100svh;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:var(--f-body);font-weight:300;font-size:clamp(15px,1.05vw,17px);
+  line-height:1.6;overflow-x:hidden;text-wrap:pretty;
+  -webkit-font-smoothing:antialiased;
+}
+img,svg,canvas{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button,input{font:inherit;color:inherit}
+::selection{background:var(--accent-primary);color:#fff}
+
+:focus-visible{outline:2px solid var(--accent-toxic);outline-offset:3px}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent-toxic);outline-offset:3px}
+
+.wrap{max-width:var(--maxw);margin:0 auto;padding-inline:var(--pad)}
+.mono{font-family:var(--f-mono);font-weight:400;letter-spacing:0.08em;text-transform:uppercase;font-size:11px}
+.muted{color:var(--ink-muted)}
+.skip{position:absolute;left:-9999px}
+.skip:focus{left:var(--pad);top:12px;z-index:200;background:var(--accent-toxic);color:#000;padding:10px 16px;font-family:var(--f-mono);font-size:12px}
+
+/* ---------- reveal (только при включённой анимации) ---------- */
+.js-motion .rv{opacity:0;transform:translateY(22px);
+  transition:opacity var(--t-slow) var(--ease-out),transform var(--t-slow) var(--ease-out);
+  transition-delay:var(--d,0ms)}
+.js-motion .rv.in{opacity:1;transform:none}
+
+/* ============================ NAV ============================ */
+.nav{position:fixed;inset:0 0 auto 0;z-index:80;
+  display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
+  padding:14px var(--pad);
+  border-bottom:1px solid transparent;
+  transition:background var(--t-mid) var(--ease),border-color var(--t-mid) var(--ease),backdrop-filter var(--t-mid)}
+.nav.solid{background:rgba(8,8,10,0.72);backdrop-filter:blur(14px);border-bottom-color:var(--line)}
+.nav__brand{font-family:var(--f-display);font-weight:700;letter-spacing:0.22em;font-size:13px;text-transform:uppercase;
+  display:flex;align-items:center;gap:10px}
+.mark{fill:currentColor;flex:none}
+.nav__brand .mark{width:24px;height:24px;transition:transform 900ms var(--ease),color var(--t-fast) var(--ease)}
+.nav__brand:hover .mark{transform:rotate(45deg);color:var(--accent-toxic)}
+.nav__links{display:flex;gap:var(--s3);align-items:center}
+.nav__links a{color:var(--ink-muted);transition:color var(--t-fast) var(--ease)}
+.nav__links a:hover{color:var(--ink)}
+.nav__right{display:flex;align-items:center;gap:var(--s2)}
+@media(max-width:860px){.nav__links{display:none}}
+@media(max-width:620px){
+  .nav{gap:10px;padding:12px var(--pad)}
+  .nav__right{gap:8px}
+  .nav__brand{font-size:12px;letter-spacing:.16em}
+  #soundLabel{display:none}
+  .sound{padding:9px 10px}
+  .nav .btn{font-size:10.5px;padding:12px 14px;letter-spacing:.1em}
+}
+
+/* кнопка звука */
+.sound{display:inline-flex;align-items:center;gap:8px;background:none;border:1px solid var(--line-strong);
+  padding:7px 12px;cursor:pointer;transition:border-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.sound:hover{border-color:var(--ink)}
+.sound__bars{display:flex;gap:2px;align-items:flex-end;height:10px}
+.sound__bars i{width:2px;height:3px;background:currentColor;display:block}
+.sound[aria-pressed="true"]{color:var(--accent-toxic);border-color:var(--accent-toxic)}
+.sound[aria-pressed="true"] .sound__bars i{animation:eq 900ms ease-in-out infinite alternate}
+.sound[aria-pressed="true"] .sound__bars i:nth-child(2){animation-delay:150ms}
+.sound[aria-pressed="true"] .sound__bars i:nth-child(3){animation-delay:300ms}
+@keyframes eq{from{height:3px}to{height:10px}}
+
+/* ============================ BUTTONS ============================ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  font-family:var(--f-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;
+  padding:16px 26px;border:1px solid var(--ink);background:var(--ink);color:#08080A;
+  cursor:pointer;position:relative;overflow:hidden;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.btn::after{content:'';position:absolute;inset:0;background:var(--accent-primary);
+  transform:translateY(101%);transition:transform 420ms var(--ease);z-index:-1}
+.btn:hover{background:var(--accent-primary);border-color:var(--accent-primary);color:#fff}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn--ghost{background:none;color:var(--ink);border-color:var(--line-strong)}
+.btn--ghost:hover{background:none;border-color:var(--ink);color:var(--ink)}
+.btn--toxic{background:var(--accent-toxic);border-color:var(--accent-toxic);color:#08080A}
+.btn--toxic:hover{background:#c9ff62;border-color:#c9ff62;color:#08080A}
+/* плоский текстовый CTA — «контрастная тишина» между экшн-сценами */
+.btn--flat{background:none;border:none;padding:6px 0;color:var(--ink);
+  border-bottom:1px solid var(--line-strong)}
+.btn--flat:hover{background:none;color:var(--accent-toxic);border-bottom-color:var(--accent-toxic)}
+
+/* ============================ HERO ============================ */
+.hero{position:relative;min-height:100svh;display:flex;flex-direction:column;justify-content:flex-end;
+  padding-bottom:var(--s5);overflow:clip}
+#net{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+.hero__veil{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 80% at 50% 45%,rgba(8,8,10,0) 30%,rgba(8,8,10,.72) 78%,var(--bg) 100%)}
+.hero__inner{position:relative;z-index:2}
+.hero__eyebrow{display:flex;gap:var(--s2);flex-wrap:wrap;color:var(--ink-muted);margin-bottom:var(--s3)}
+.hero__eyebrow span{border:1px solid var(--line);padding:5px 10px}
+.hero h1{
+  font-family:var(--f-display);font-weight:700;text-transform:uppercase;
+  font-size:clamp(64px,17.5vw,268px);line-height:0.8;letter-spacing:-0.035em;margin:0;
+  display:flex;flex-wrap:wrap}
+.hero h1 span{display:inline-block;transform:translateY(0.18em);opacity:0;
+  animation:letterIn 1.1s var(--ease-out) forwards;animation-delay:calc(var(--i) * 70ms + 250ms)}
+@keyframes letterIn{to{transform:none;opacity:1}}
+.hero__meta{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);align-items:flex-end;
+  justify-content:space-between;margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--line)}
+.hero__place{max-width:34ch;color:var(--ink-muted);font-size:15px}
+.hero__place b{color:var(--ink);font-weight:400}
+.hero__cta{display:flex;gap:var(--s2) var(--s4);align-items:center;flex-wrap:wrap}
+.hero__status{position:absolute;left:var(--pad);right:var(--pad);bottom:14px;z-index:2;
+  display:flex;gap:var(--s3);justify-content:space-between;flex-wrap:wrap;
+  color:var(--ink-muted);border-top:1px solid var(--line);padding-top:10px}
+.hero__status b{color:var(--ink);font-weight:500}
+@media(max-width:700px){.hero__status{position:static;margin-top:var(--s4)}
+  .hero{padding-bottom:var(--s4)}}
+
+/* ============================ SECTIONS ============================ */
+section{position:relative}
+.sec{padding-block:clamp(72px,11vw,168px)}
+.sec--sunken{background:var(--bg-sunken)}
+.sechead{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);
+  border-top:1px solid var(--line);padding-top:var(--s2);margin-bottom:var(--s5)}
+.sechead .idx{color:var(--ink-muted)}
+/* оверсайз-разделители (акцент Balenciaga post-2017) */
+.slab{font-family:var(--f-display);font-weight:700;text-transform:uppercase;
+  font-size:clamp(46px,13.5vw,190px);line-height:0.82;letter-spacing:-0.04em;margin:0}
+.slab--outline{color:transparent;-webkit-text-stroke:1px var(--line-strong)}
+
+/* ---------- манифест ---------- */
+.manifest{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:var(--s6) var(--s7);align-items:start}
+.manifest p{font-size:clamp(17px,1.5vw,22px);line-height:1.55;font-weight:200;margin:0 0 var(--s3)}
+.manifest p:last-child{margin-bottom:0}
+.manifest strong{font-weight:400;color:var(--ink)}
+.manifest__side{border-left:1px solid var(--line);padding-left:var(--s3)}
+.manifest__side dt{color:var(--ink-muted);font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-top:var(--s3)}
+.manifest__side dd{margin:4px 0 0;font-size:15px}
+@media(max-width:900px){.manifest{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- афиша ---------- */
+.events{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line)}
+.ev{background:var(--bg);padding:var(--s4) var(--s3);display:grid;
+  grid-template-columns:minmax(0,auto) minmax(0,1fr) auto;gap:var(--s3) var(--s5);align-items:center;
+  transition:background var(--t-mid) var(--ease)}
+.ev:hover{background:var(--bg-raised)}
+.ev__date{font-family:var(--f-mono);font-weight:500;line-height:1;letter-spacing:-0.02em}
+.ev__date b{display:block;font-size:clamp(40px,5vw,62px);font-weight:500}
+.ev__date span{display:block;margin-top:8px;color:var(--ink-muted);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.ev__name{font-family:var(--f-display);font-weight:700;text-transform:uppercase;
+  font-size:clamp(26px,3.4vw,44px);line-height:0.95;letter-spacing:-0.03em;margin:0}
+.ev__tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--s2)}
+.ev__tags span{border:1px solid var(--line);padding:5px 9px;color:var(--ink-muted);
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.ev__cta{display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+.ev--soon{background:var(--bg-raised);position:relative}
+.ev--soon::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent-toxic)}
+.ev--tba{color:var(--ink-muted);grid-template-columns:minmax(0,auto) minmax(0,1fr)}
+.ev--tba .ev__date b{color:var(--ink-muted)}
+@media(max-width:860px){.ev,.ev--tba{grid-template-columns:minmax(0,1fr);gap:var(--s3)}
+  .ev__cta{flex-direction:row;align-items:stretch;flex-wrap:wrap}}
+
+/* ---------- формат события ---------- */
+.format{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.fmt{background:var(--bg-raised);padding:var(--s3);display:flex;flex-direction:column;gap:10px;min-height:150px;
+  transition:background var(--t-mid) var(--ease)}
+.fmt:hover{background:#17171c}
+.fmt__n{color:var(--accent-primary);font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.fmt__t{font-family:var(--f-display);font-weight:700;text-transform:uppercase;font-size:clamp(18px,2vw,24px);
+  line-height:1;letter-spacing:-0.02em;margin:auto 0 0}
+.fmt__s{color:var(--ink-muted);font-size:13px}
+.fmt a{color:var(--accent-toxic);border-bottom:1px solid transparent}
+.fmt a:hover{border-bottom-color:var(--accent-toxic)}
+
+/* ---------- ростеры (тату / маркет) ---------- */
+.rosters{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s5);margin-top:var(--s7)}
+.roster ul{list-style:none;margin:0;padding:0}
+.roster li{display:flex;align-items:baseline;gap:var(--s2);padding:14px 0;border-bottom:1px solid var(--line);
+  font-family:var(--f-display);font-weight:500;font-size:clamp(17px,1.9vw,22px);letter-spacing:-0.01em}
+.roster li i{font-family:var(--f-mono);font-style:normal;font-size:11px;color:var(--ink-muted);letter-spacing:.1em}
+.roster .sechead a{color:var(--accent-toxic)}
+
+/* ---------- место ---------- */
+.place{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--s4) var(--s5);
+  border:1px solid var(--line);padding:var(--s4) var(--s3);margin-top:var(--s7);align-items:center}
+.place__meta{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px var(--s3);align-self:center}
+.place__meta dt{color:var(--ink-muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.place__meta dd{margin:0;font-size:12px;letter-spacing:.04em}
+
+/* ---------- лайн-ап ---------- */
+.lineup{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.act{background:var(--bg);padding:var(--s3);display:flex;flex-direction:column;gap:var(--s3);
+  transition:background var(--t-mid) var(--ease)}
+.act:hover{background:var(--bg-raised)}
+.act__sigil{aspect-ratio:3/4;position:relative;background:var(--bg-sunken);overflow:hidden;
+  display:grid;place-items:center;border:1px solid var(--line)}
+.act__sigil svg{width:78%;height:78%;transition:transform 700ms var(--ease),filter 700ms var(--ease)}
+.act:hover .act__sigil svg{transform:scale(1.08) rotate(2deg);filter:drop-shadow(0 0 14px var(--accent-primary))}
+.act__ph{position:absolute;left:8px;bottom:8px;color:var(--ink-muted);font-size:10px}
+.act__name{font-family:var(--f-display);font-weight:700;text-transform:uppercase;
+  font-size:clamp(20px,2vw,28px);line-height:1;letter-spacing:-0.02em}
+.act__row{display:flex;justify-content:space-between;gap:var(--s2);color:var(--ink-muted)}
+.act--end{background:var(--bg-raised);justify-content:space-between}
+.act--end .mark{width:clamp(48px,5vw,72px);height:clamp(48px,5vw,72px);color:var(--accent-primary)}
+.act--end .btn{align-self:flex-start}
+@media(max-width:640px){
+  .lineup{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .act{padding:var(--s2);gap:var(--s2)}
+  .act__name{font-size:16px}
+  .act__row{flex-direction:column;gap:2px}
+  .act__ph{display:none}
+}
+
+/* ---------- билеты ---------- */
+.tickets{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.tier{background:var(--bg-raised);padding:var(--s4) var(--s3);display:flex;flex-direction:column;gap:var(--s3);
+  position:relative;transition:background var(--t-mid) var(--ease)}
+.tier:hover{background:#17171c}
+.tier__top{display:flex;justify-content:space-between;align-items:center;color:var(--ink-muted)}
+.tier__name{font-family:var(--f-display);font-weight:700;text-transform:uppercase;font-size:28px;line-height:1;letter-spacing:-0.02em;margin:0}
+.tier__price{font-family:var(--f-mono);font-weight:500;font-size:clamp(34px,4.2vw,54px);letter-spacing:-0.03em;line-height:1}
+.tier__price s{color:var(--ink-muted);font-size:0.4em;font-weight:400;display:block;margin-bottom:4px}
+.tier__price--tba{font-size:clamp(20px,2.4vw,28px);color:var(--ink-muted);letter-spacing:0}
+.tier ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;flex:1}
+.tier li{display:flex;gap:10px;color:var(--ink-muted);font-size:14px}
+.tier li::before{content:'—';color:var(--accent-primary)}
+.tier--hot{background:#131018}
+.tier__flag{position:absolute;top:0;right:0;background:var(--accent-primary);color:#fff;
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;padding:5px 10px;text-transform:uppercase}
+.tier__disc{color:var(--accent-toxic);font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+
+/* ---------- реферальная шкала (центральный блок) ---------- */
+.ref{background:var(--bg-sunken);border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  position:relative;overflow:clip}
+#netRef{position:absolute;inset:0;width:100%;height:100%;z-index:0;opacity:.55;
+  -webkit-mask-image:radial-gradient(62% 62% at 26% 52%,#000 15%,transparent 76%);
+  mask-image:radial-gradient(62% 62% at 26% 52%,#000 15%,transparent 76%)}
+/* правую половину (лестница) держим в тишине — сеть уходит под типографику слева */
+.ref::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(90deg,transparent 30%,rgba(5,5,6,.55) 46%,var(--bg-sunken) 60%)}
+.ref>.wrap{position:relative;z-index:1}
+@media(max-width:1000px){.ref::before{background:linear-gradient(180deg,transparent 22%,rgba(5,5,6,.7) 42%,var(--bg-sunken) 58%)}}
+.ref__grid{display:grid;grid-template-columns:minmax(0,0.95fr) minmax(0,1.05fr);gap:var(--s6) var(--s7);align-items:start}
+@media(max-width:1000px){.ref__grid{grid-template-columns:minmax(0,1fr)}}
+.ref__lead{font-size:clamp(18px,1.7vw,24px);font-weight:200;line-height:1.5;margin:0 0 var(--s4)}
+.ladder{list-style:none;margin:0;padding:0;position:relative}
+.ladder::before{content:'';position:absolute;left:15px;top:16px;bottom:16px;width:1px;background:var(--line)}
+.ladder::after{content:'';position:absolute;left:15px;top:16px;width:1px;
+  background:linear-gradient(180deg,var(--accent-primary),var(--accent-toxic));
+  height:var(--fill,0px);transition:height 1200ms var(--ease);box-shadow:0 0 12px var(--accent-primary)}
+.step{display:grid;grid-template-columns:32px 1fr auto;gap:var(--s2);align-items:center;
+  padding:11px 0;position:relative}
+.step__dot{width:11px;height:11px;margin-left:10px;border:1px solid var(--line-strong);border-radius:50%;
+  background:var(--bg);transition:all 600ms var(--ease)}
+.step__n{font-family:var(--f-mono);font-size:12px;color:var(--ink-muted);min-width:34px}
+.step__label{font-size:15px;color:var(--ink-muted);transition:color 600ms var(--ease)}
+.step.on .step__dot{background:var(--accent-toxic);border-color:var(--accent-toxic);
+  box-shadow:0 0 0 4px rgba(182,255,60,.14),0 0 18px var(--accent-toxic)}
+.step.on .step__label{color:var(--ink)}
+.step.next .step__dot{border-color:var(--accent-primary);box-shadow:0 0 0 4px rgba(123,47,247,.16)}
+.step.next .step__label{color:var(--ink)}
+.step.burn .step__dot{animation:burn 1100ms var(--ease)}
+@keyframes burn{0%{transform:scale(1)}30%{transform:scale(2.4);box-shadow:0 0 0 12px rgba(182,255,60,.3),0 0 42px var(--accent-toxic)}100%{transform:scale(1)}}
+.step--final .step__label{color:var(--ink);font-weight:400}
+.step--final .step__n{color:var(--accent-toxic)}
+
+/* ---------- кабинет ---------- */
+.cab{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+@media(max-width:940px){.cab{grid-template-columns:minmax(0,1fr)}}
+.cab__panel{background:var(--bg-raised);padding:var(--s4) var(--s3)}
+.cab__viz{background:var(--bg-sunken);position:relative;min-height:420px}
+#netCab{position:absolute;inset:0;width:100%;height:100%}
+.cab__vizmeta{position:absolute;left:var(--s3);bottom:var(--s3);right:var(--s3);
+  display:flex;justify-content:space-between;gap:var(--s2);color:var(--ink-muted);pointer-events:none}
+.cab__vizmeta b{color:var(--accent-toxic);font-weight:500}
+.field{display:flex;gap:8px;margin-top:10px}
+.field input{flex:1;min-width:0;background:var(--bg-sunken);border:1px solid var(--line-strong);
+  padding:14px 14px;font-family:var(--f-mono);font-size:13px;letter-spacing:.02em}
+.field input:read-only{color:var(--accent-toxic)}
+.stat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);margin:var(--s4) 0}
+.stat div{background:var(--bg-raised);padding:var(--s2)}
+.stat .k{color:var(--ink-muted);font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.stat .v{font-family:var(--f-mono);font-weight:500;font-size:clamp(24px,3vw,34px);line-height:1.2;margin-top:6px}
+.bar{height:2px;background:var(--line);margin:var(--s2) 0 8px;position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,var(--accent-primary),var(--accent-toxic));
+  transition:width 1000ms var(--ease)}
+.invites{list-style:none;margin:var(--s2) 0 0;padding:0;max-height:168px;overflow:auto;
+  border-top:1px solid var(--line)}
+.invites li{display:flex;justify-content:space-between;gap:var(--s2);padding:9px 0;border-bottom:1px solid var(--line);
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;color:var(--ink-muted)}
+.invites li b{color:var(--ink);font-weight:400}
+.invites li.fresh{animation:fresh 1200ms var(--ease)}
+@keyframes fresh{0%{background:rgba(182,255,60,.16);color:var(--accent-toxic)}100%{background:transparent}}
+.empty{color:var(--ink-muted);font-size:14px;padding:var(--s3) 0;border-top:1px solid var(--line);margin-top:var(--s2)}
+/* minmax(0,…) везде, где грид может быть раздут min-content ребёнка */
+.locked{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s3);align-content:center;min-height:100%}
+.next-reward{border:1px solid var(--line);padding:var(--s2);margin-top:var(--s3);display:flex;gap:var(--s2);align-items:center;justify-content:space-between}
+.next-reward .n{color:var(--accent-primary);font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:150;
+  background:var(--accent-toxic);color:#08080A;font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;
+  text-transform:uppercase;padding:12px 18px;opacity:0;pointer-events:none;
+  transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease)}
+.toast.show{opacity:1;transform:translateX(-50%)}
+
+/* ---------- свои: контакты Telegram ---------- */
+.crew__bar{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;justify-content:space-between;
+  border:1px solid var(--line);padding:12px 14px;margin:var(--s4) 0 var(--s3)}
+.src{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;border:1px dashed var(--line-strong);padding:5px 9px;color:var(--ink-muted)}
+.src b{color:var(--accent-secondary);font-weight:500}
+.src--live{border-style:solid;border-color:rgba(182,255,60,.4)}
+.src--live b{color:var(--accent-toxic)}
+.crew__sub{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);
+  margin:var(--s5) 0 var(--s2);border-top:1px solid var(--line);padding-top:var(--s2)}
+.crew{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.mate{background:var(--bg-raised);padding:14px var(--s3);display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s2);align-items:center;
+  transition:background var(--t-mid) var(--ease)}
+.mate:hover{background:#17171c}
+.mate--invite{background:var(--bg)}
+.mate.fresh{animation:fresh 1200ms var(--ease)}
+.ava{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:50%;
+  font-family:var(--f-mono);font-size:14px;font-weight:500;color:#08080A;background:var(--accent-primary)}
+.ava img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.mate--invite .ava{background:var(--bg-sunken);color:var(--ink-muted);border:1px solid var(--line-strong)}
+.mate__n{font-family:var(--f-display);font-weight:500;font-size:16px;letter-spacing:-0.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mate__h{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.mate__s{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  border:1px solid var(--line-strong);padding:4px 7px;color:var(--ink-muted);white-space:nowrap}
+.mate__s--paid{color:var(--accent-toxic);border-color:rgba(182,255,60,.45)}
+.mate__s--mine{color:var(--accent-primary);border-color:rgba(123,47,247,.5)}
+.mate__s--demo{border-style:dashed}
+.mate__btn{background:none;border:1px solid var(--line-strong);cursor:pointer;padding:9px 12px;
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  transition:border-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.mate__btn:hover{border-color:var(--accent-toxic);color:var(--accent-toxic)}
+.gate{border:1px solid var(--line-strong);background:var(--bg-raised);padding:var(--s3);
+  display:grid;gap:var(--s2);grid-template-columns:minmax(0,1fr)}
+.gate h4{font-family:var(--f-display);font-weight:700;text-transform:uppercase;letter-spacing:-0.02em;
+  font-size:clamp(20px,2.4vw,28px);margin:0}
+.gate p{margin:0;color:var(--ink-muted);font-size:14px;max-width:70ch}
+.gate__row{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
+@media(max-width:520px){
+  .crew{grid-template-columns:minmax(0,1fr)}
+  .mate{padding:12px var(--s2);gap:10px}
+}
+
+/* ============================ TELEGRAM MINI APP ============================ */
+/* Внутри Telegram страница живёт в webview: свой хедер, свои safe-area,
+   свои системные кнопки. html.tg включает только эти правки — вне Telegram
+   лендинг остаётся прежним. */
+html.tg .nav{padding-top:calc(12px + var(--tg-top))}
+html.tg .hero{min-height:var(--tg-vh)}
+html.tg .sound{display:none}                 /* аудио решает клиент Telegram */
+html.tg .skip{display:none}
+html.tg .toast{bottom:calc(26px + var(--tg-bottom))}
+html.tg .dev{bottom:calc(16px + var(--tg-bottom))}
+html.tg footer{padding-bottom:calc(var(--s4) + var(--tg-bottom))}
+html.tg .modal{padding:0}
+html.tg .sheet{max-height:100%;height:100%;width:100%;border:none;
+  grid-template-columns:minmax(0,1fr);overflow:auto}
+html.tg .sheet__aside{border-right:none;border-bottom:1px solid var(--line)}
+html.tg .sheet__main{padding-bottom:calc(var(--s6) + var(--tg-bottom))}
+/* «✕» прячем только когда системная BackButton реально включилась —
+   иначе на старом клиенте чекаут было бы нечем закрыть */
+html.tg.tg-back .sheet__close{display:none}
+html.tg.tg-mainbtn #payBtn{display:none}     /* оплата — системной MainButton */
+
+/* ---------- FAQ ---------- */
+.faq{border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;list-style:none;padding:var(--s3) 0;display:flex;gap:var(--s3);align-items:baseline;
+  font-family:var(--f-display);font-weight:500;font-size:clamp(17px,1.9vw,24px);letter-spacing:-0.01em;
+  transition:color var(--t-fast) var(--ease)}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:'+';margin-left:auto;color:var(--ink-muted);font-family:var(--f-mono);font-weight:400}
+.faq details[open] summary::after{content:'−';color:var(--accent-toxic)}
+.faq summary:hover{color:var(--accent-toxic)}
+.faq__a{padding:0 0 var(--s3) calc(var(--s3) + 28px);max-width:76ch;color:var(--ink-muted)}
+.faq__a code{font-family:var(--f-mono);font-size:12px;color:var(--accent-toxic);background:rgba(182,255,60,.08);padding:1px 5px}
+@media(max-width:640px){.faq__a{padding-left:0}}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line);padding-block:var(--s5) var(--s4)}
+.foot{display:flex;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;align-items:flex-end}
+.foot nav{display:flex;gap:var(--s3);flex-wrap:wrap;align-items:center}
+.foot a:hover{color:var(--accent-toxic)}
+.foot .ph{color:var(--ink-muted);border:1px dashed var(--line-strong);padding:5px 9px}
+.foot__brand{display:flex;align-items:center;gap:var(--s3)}
+.foot__brand .mark{width:clamp(44px,7vw,84px);height:clamp(44px,7vw,84px);color:var(--accent-primary)}
+.disclaimer{border:1px solid var(--accent-secondary);color:var(--accent-secondary);
+  padding:12px 14px;margin-top:var(--s4);max-width:74ch}
+
+/* ============================ MODAL / CHECKOUT ============================ */
+.modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:var(--s2)}
+.modal[open],.modal.open{display:flex}
+.modal__scrim{position:absolute;inset:0;background:rgba(4,4,6,.86);backdrop-filter:blur(6px)}
+.sheet{position:relative;width:min(880px,100%);max-height:92svh;overflow:auto;background:var(--bg-raised);
+  border:1px solid var(--line-strong);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr)}
+@media(max-width:820px){.sheet{grid-template-columns:1fr}}
+.sheet__aside{background:var(--bg-sunken);padding:var(--s4) var(--s3);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;gap:var(--s3)}
+.sheet__main{padding:var(--s4) var(--s3)}
+.sheet__close{position:absolute;top:10px;right:10px;background:none;border:1px solid var(--line-strong);
+  width:34px;height:34px;cursor:pointer;font-family:var(--f-mono);z-index:2}
+.sheet__close:hover{border-color:var(--accent-secondary);color:var(--accent-secondary)}
+.testbanner{border:1px solid var(--accent-secondary);color:var(--accent-secondary);padding:12px 14px;
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;line-height:1.6}
+.order{border-top:1px solid var(--line);padding-top:var(--s2);display:flex;justify-content:space-between;align-items:baseline}
+.order .sum{font-family:var(--f-mono);font-weight:500;font-size:30px}
+.attrline{color:var(--ink-muted);font-size:12px;font-family:var(--f-mono);letter-spacing:.05em}
+.attrline b{color:var(--accent-primary)}
+
+.form{display:grid;gap:var(--s2)}
+.grp{display:flex;flex-direction:column;gap:6px}
+.grp>label{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)}
+.inp{position:relative;display:flex;align-items:center}
+.inp input{width:100%;background:var(--bg-sunken);border:1px solid var(--line-strong);padding:14px 14px;
+  font-family:var(--f-mono);font-size:14px;letter-spacing:.06em;
+  transition:border-color var(--t-fast) var(--ease)}
+.inp input::placeholder{color:#4a4a52}
+.inp input:focus{border-color:var(--accent-primary)}
+.grp.bad .inp input{border-color:var(--accent-secondary)}
+.grp.ok .inp input{border-color:rgba(182,255,60,.4)}
+.brand{position:absolute;right:12px;font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;
+  color:var(--ink-muted);border:1px solid var(--line-strong);padding:3px 6px;pointer-events:none}
+.brand[data-b="visa"]{color:#fff;border-color:#fff}
+.brand[data-b="mc"]{color:#FF8A00;border-color:#FF8A00}
+.brand[data-b="mir"]{color:var(--accent-toxic);border-color:var(--accent-toxic)}
+.err{color:var(--accent-secondary);font-family:var(--f-mono);font-size:10.5px;letter-spacing:.05em;
+  min-height:14px;text-transform:uppercase}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+.testcards{margin-top:var(--s3);border:1px dashed var(--line-strong);padding:var(--s2)}
+.testcards .t{color:var(--ink-muted);font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.testcards button{display:flex;justify-content:space-between;gap:var(--s2);width:100%;background:none;
+  border:1px solid var(--line);padding:8px 10px;margin-bottom:6px;cursor:pointer;
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-align:left;
+  transition:border-color var(--t-fast) var(--ease)}
+.testcards button:hover{border-color:var(--ink)}
+.testcards .ok{color:var(--accent-toxic)}
+.testcards .no{color:var(--accent-secondary)}
+.submit{margin-top:var(--s3);width:100%}
+.spin{width:12px;height:12px;border:1.5px solid currentColor;border-top-color:transparent;border-radius:50%;
+  animation:spin 700ms linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* результат оплаты */
+.result{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s3);padding:var(--s5) var(--s3);text-align:left}
+.pass{border:1px solid var(--accent-toxic);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3);padding:var(--s3);
+  background:linear-gradient(180deg,rgba(182,255,60,.05),transparent)}
+.pass h4{font-family:var(--f-display);font-weight:700;text-transform:uppercase;font-size:26px;margin:0 0 6px;letter-spacing:-0.02em}
+.pass dl{margin:var(--s2) 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px var(--s2);font-family:var(--f-mono);font-size:11px;letter-spacing:.05em}
+.pass dt{color:var(--ink-muted);text-transform:uppercase}
+.pass dd{margin:0}
+.qr{width:132px;height:132px;background:#fff;padding:8px}
+.qr canvas{width:100%;height:100%;image-rendering:pixelated}
+.qr__cap{font-family:var(--f-mono);font-size:9px;letter-spacing:.08em;color:var(--ink-muted);text-align:center;margin-top:6px}
+.decline{border:1px solid var(--accent-secondary);padding:var(--s3);color:var(--accent-secondary)}
+.decline h4{font-family:var(--f-display);font-size:24px;text-transform:uppercase;margin:0 0 8px;letter-spacing:-0.02em}
+.decline p{color:var(--ink-muted);margin:0}
+
+/* ============================ DEV PANEL ============================ */
+.dev{position:fixed;right:16px;bottom:16px;width:288px;z-index:110;/* ниже чекаута (120) — не перекрывает форму */
+  background:rgba(17,17,20,.96);backdrop-filter:blur(12px);border:1px solid var(--accent-secondary);
+  padding:14px;display:none}
+.dev.on{display:block}
+.dev h5{margin:0 0 4px;font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-secondary)}
+.dev p{margin:0 0 10px;font-size:11px;color:var(--ink-muted);line-height:1.5}
+.dev__row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.dev button{background:none;border:1px solid var(--line-strong);padding:8px 6px;cursor:pointer;
+  font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  transition:border-color var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.dev button:hover{border-color:var(--accent-toxic);color:var(--accent-toxic)}
+.dev input{width:100%;background:var(--bg-sunken);border:1px solid var(--line-strong);padding:8px;
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.dev__out{font-family:var(--f-mono);font-size:10px;color:var(--ink-muted);word-break:break-all;margin-top:8px;
+  border-top:1px solid var(--line);padding-top:8px;line-height:1.6}
+
+/* ============================ REDUCED MOTION ============================ */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .hero h1 span{opacity:1;transform:none;animation:none}
+  .js-motion .rv{opacity:1;transform:none}
+}
+/* тот же режим по QA-флагу ?reduce=1 */
+html.reduce *,html.reduce *::before,html.reduce *::after{
+  animation-duration:.001ms!important;animation-iteration-count:1!important;
+  transition-duration:.001ms!important;scroll-behavior:auto!important}
+html.reduce .hero h1 span{opacity:1;transform:none;animation:none}
+html.reduce .rv{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs>
+<symbol id="rz-logo" viewBox="0 0 499 499"><path id="logoPath" fill-rule="evenodd" clip-rule="evenodd" d="M 91.08,376.99 c -0.05,-5.65 -0.39,-11.29 -1.02,-16.91 c -0.59,-5.85 -0.97,-11.71 -1.13,-17.59 c 0.61,-4.85 3.32,-6.89 8.13,-6.14 c 4.83,2.45 14.51,13.78 19.06,17.97 c 1.47,1.17 3.25,-0.52 4.25,-1.5 c 5.88,-6.15 11.75,-12.16 17.99,-17.95 c 0.73,-0.9 0.84,-1.88 0.33,-2.92 c -15.56,-19.03 -25.75,-44.92 -28.81,-69.31 c -0.62,-0.7 -1.4,-1.01 -2.36,-0.94 c -9.67,-0.03 -19.34,0.05 -29,0.23 c -0.53,0.13 -0.96,0.42 -1.3,0.85 c -3.32,5.03 -7.66,8.92 -13.02,11.67 c -12,4.24 -17.56,2.9 -28.49,-0.84 c -1.65,-1.62 -3.41,-3.13 -5.28,-4.54 c -30.72,-29.11 13.69,-76.21 45.45,-41.52 c 2.76,1.51 26.68,0.28 31.64,0.81 c 1.45,0.17 2.34,-0.43 2.69,-1.81 c 3.07,-23.81 13.12,-47.07 27.68,-66.16 c 0.37,-0.57 0.49,-1.19 0.35,-1.86 c -6.62,-6.78 -13.3,-13.52 -20.04,-20.23 c -1.15,-1.48 -2.43,-1.61 -3.84,-0.42 c -5.78,3.85 -20.07,26.43 -27.46,16.76 c -3.32,-4.98 3.89,-43.65 3.81,-52.15 c 1.57,-8.9 6.83,-14.07 15.79,-15.51 c 14.65,-1.12 29.32,-2.09 44,-2.9 c 3.95,-0.58 6.77,0.9 8.47,4.43 c 1.94,6.86 -13.9,17.01 -17.58,22.4 c -1.23,1.38 -1.09,2.64 0.42,3.77 c 6.57,6.45 13.01,13.02 19.32,19.72 c 0.95,0.61 1.9,0.58 2.84,-0.08 c 15.17,-12.68 35.22,-21.12 54.49,-25.55 c 4.68,-0.86 9.34,-1.8 13.97,-2.79 c 0.6,-0.7 0.87,-1.52 0.81,-2.46 c 0.03,-3.78 0.81,-23.7 -0.75,-25.59 c -14.64,-9.41 -19.66,-27.35 -10.77,-42.63 c 26.13,-40.02 82.03,7.82 45.97,39.74 c -1.98,2.52 -0.5,23.89 -0.96,28.48 c -0.13,1.22 0.26,2.21 1.17,2.97 c 22.88,3.11 50.53,14.03 68.05,28.95 c 1.04,0.72 2.04,0.68 3,-0.12 c 6.42,-6.55 12.88,-13.05 19.38,-19.5 c 1.3,-1.01 1.64,-2.24 1.02,-3.7 c -6.2,-6.17 -13.37,-12.26 -18.6,-19.18 c -3.62,-6.21 1.52,-10.77 7.75,-9.86 c 17.22,2.33 34.72,3.11 51.75,6.35 c 5.83,3.78 9.07,9.13 9.71,16.06 c 1.02,14.33 1.93,28.67 2.73,43.01 c 0.42,4.36 -1.47,7.05 -5.68,8.05 c -5.43,0.86 -16.6,-14.45 -21.11,-17.75 c -0.67,-0.59 -1.44,-0.84 -2.32,-0.74 c -7.18,6.83 -14.31,13.74 -21.38,20.71 c -0.64,1.14 -0.65,2.28 -0.02,3.42 c 1.74,2.31 3.42,4.66 5.06,7.05 c 1.24,2.66 2.7,5.19 4.41,7.59 c 6.9,13.35 12.25,26.9 15.29,41.68 c 0.7,4 1.37,7.99 2.02,11.99 c 0.69,0.68 1.53,1 2.52,0.95 c 9.02,0.07 18.05,0 27.06,-0.2 c 1.84,-0.38 3.39,-3.39 4.57,-4.69 c 14.22,-15.27 37.9,-12.98 49.13,4.52 c 19.17,33.23 -24.95,65.5 -51.2,34.48 c -2.22,-1.49 -27.08,-0.63 -31.52,-0.57 c -0.53,0.07 -0.94,0.33 -1.23,0.77 c -1.14,6.66 -2.66,13.24 -4.55,19.73 c -0.59,2.48 0.47,2.32 -1.41,4.26 c -4.95,16.16 -14.82,33.47 -25.69,46.26 c -0.24,0.42 -0.31,0.86 -0.22,1.34 c 6.45,6.72 13,13.35 19.65,19.91 c 0.67,0.65 1.44,1.11 2.32,1.38 c 6.25,-6.03 12.55,-12.02 18.88,-17.99 c 3.34,-1.58 6.11,-0.91 8.32,2.04 c 1.86,6.48 -0.66,49.38 -4.05,57.6 c -1.68,1.87 -3.52,3.57 -5.51,5.11 c -8.94,4.98 -37.15,5.14 -48.56,7.34 c -6.73,1.48 -16.99,0.66 -13.12,-8.99 c 5.39,-6.9 12.56,-12.85 18.6,-19.26 c 0.95,-1 0.97,-2 0.06,-3.03 c -5.99,-6.01 -11.97,-12.02 -17.95,-18.03 c -1.67,-1.31 -2.41,-4.58 -5.1,-3.07 c -19.81,13.76 -39.58,21.41 -63.47,24.61 c -2.02,0.28 -2.82,1.46 -2.41,3.52 c 0.5,3.55 -0.98,25.76 0.97,27.01 c 14.73,9.2 19.6,25.45 12.22,41.33 c -26,42.05 -82.27,-4.9 -47.67,-37.68 c 1.91,-3.13 0.58,-27.87 0.8,-33.23 c -0.1,-0.44 -0.35,-0.78 -0.74,-1.01 c -6.27,-1.25 -12.5,-2.68 -18.69,-4.31 c -15.61,-4.47 -33.47,-12.71 -46.02,-22.87 c -0.65,-0.38 -1.35,-0.48 -2.08,-0.3 c -7.08,6.93 -14.03,13.98 -20.85,21.14 c -0.12,0.9 0.14,1.68 0.77,2.33 c 5.69,6.43 14.49,12.86 18.76,20.08 c 1.94,5.73 -2.45,9.12 -7.86,8.61 c -15.32,-1.73 -30.66,-3.39 -46,-4.98 c -14.87,-2.28 -16.8,-14.73 -16.61,-27.62 Z M 126.07,221 c 1.14,10.35 -0.69,15.97 9.76,20.89 c 17.24,13.01 51.08,12.48 72.21,18.5 c 9.2,2.65 25.23,9.74 28.45,19.59 c 2.41,7.35 0.93,36.33 8.31,39.34 c 9.1,4.35 13.17,2.19 14.41,-7.81 c 2.03,-31.47 -6.13,-67.56 19.98,-91.72 c 10.26,-5.21 15.88,-7.16 22.86,-17.01 c 6.19,-12.8 0.6,-29.03 -12.17,-35.17 c -7.2,-2.71 -13.01,5.2 -19.32,7.47 c -25.96,19.67 -45.71,7.77 -63.22,-14.95 c -9.17,-8.76 -33.77,-7.64 -44.4,-1.76 c -20.11,10.72 -30.56,34.69 -36.22,55.95 c -0.55,2.2 -0.76,4.42 -0.65,6.68 Z M 275.98,264 c 0.08,4.1 0.92,8.04 2.54,11.81 c 16.57,34.08 64.76,17.17 58.34,-18.29 c -7.68,-35.55 -60.07,-31.73 -60.88,6.48 Z M 287.43,265 c 2.07,-24.72 35.18,-26.45 37.3,-1.5 c 0.26,24.54 -34.65,28.78 -37.3,1.5 Z M 123.21,255 c 2.61,34.15 17.4,63.02 42.51,85.83 c 16.32,13.46 34.97,23.44 55.76,28.27 c 19.17,5.33 30.2,-14.93 36.24,-29.77 c 0.28,-1.08 0.99,-2.41 -0.41,-2.97 c -11.85,1.8 -27.31,-5.19 -30.72,-17.39 c -1.13,-4.72 -1.76,-9.5 -1.89,-14.35 c -0.14,-1.3 -0.86,-1.84 -2.16,-1.63 c -25.82,9.44 -56.66,-11.73 -73.79,-29.27 c -2.38,-3.9 -4.81,-7.77 -7.28,-11.62 c -5.28,-2.35 -11.43,-6.97 -16.18,-8.82 c -1.57,-0.57 -2.26,0 -2.08,1.72 Z M 166.13,269.2 c 0.06,0.86 0.46,1.52 1.19,1.98 c 10.76,9.19 41.6,27.73 54.41,15.03 c 1.42,-4.3 -12.44,-9.95 -15.71,-10.77 c -5.75,-2.29 -35.81,-6.98 -39.89,-6.24 Z"/></symbol>
+</defs></svg>
+<a class="skip" href="#tickets">Перейти к билетам</a>
+
+<!-- ============================ NAV ============================ -->
+<header class="nav" id="nav">
+  <a class="nav__brand" href="#top"><svg class="mark" aria-hidden="true"><use href="#rz-logo"/></svg>RIZZOMA</a>
+  <nav class="nav__links mono" aria-label="Разделы">
+    <a href="#events">Афиша</a>
+    <a href="#event">Событие</a>
+    <a href="#tickets">Билеты</a>
+    <a href="#referral">Сеть</a>
+    <a href="#cabinet">Узел</a>
+    <a href="#crew">Свои</a>
+  </nav>
+  <div class="nav__right">
+    <button class="sound mono" id="soundBtn" aria-pressed="false" aria-label="Фоновый звук: выключен">
+      <span class="sound__bars" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span id="soundLabel">Звук выкл</span>
+    </button>
+    <button class="btn" data-buy="regular">Получить билет</button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============================ HERO ============================ -->
+<section class="hero" aria-labelledby="heroTitle">
+  <canvas id="net" aria-hidden="true"></canvas>
+  <div class="hero__veil" aria-hidden="true"></div>
+  <div class="wrap hero__inner">
+    <div class="hero__eyebrow mono">
+      <span>Санкт-Петербург</span><span>Electronic / Techno / Witchhouse / IDM</span><span id="heroNodes">Nodes: 0</span>
+    </div>
+    <h1 id="heroTitle" aria-label="RIZZOMA"></h1>
+    <div class="hero__meta">
+      <p class="hero__place">
+        Ближайшее — <b>VIDEO LOUNGE</b>, 12 сентября 2026, 22:00.<br>
+        Грузинская ул., 3к1Б. OPEN-AIR со звуком из грузовика.<br>
+        7 артистов, маркет, тату. 18+
+      </p>
+      <div class="hero__cta">
+        <button class="btn" data-goto="#event">Смотреть событие</button>
+        <button class="btn btn--flat" data-goto="#cabinet">Войти в реферальную программу →</button>
+      </div>
+    </div>
+  </div>
+  <div class="hero__status mono wrap" aria-live="off">
+    <span>До VIDEO LOUNGE: <b id="countdown">—</b></span>
+    <span>Твой уровень: <b id="heroTier">TIER_00</b></span>
+    <span>Узлов в твоей ветви: <b id="heroCount">0</b></span>
+  </div>
+</section>
+
+<!-- ============================ МАНИФЕСТ ============================ -->
+<section class="sec" id="manifest" aria-labelledby="h-manifest">
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">01 / Движение</span><span>Манифест</span></div>
+    <h2 class="slab slab--outline" id="h-manifest" style="margin-bottom:var(--s5)">Ризома</h2>
+    <div class="manifest">
+      <div>
+        <p>RIZZOMA — не площадка и не промо-группа. Это <strong>корневая система</strong>: артисты, тату-мастера, маркет и люди, которые их приводят. У ризомы нет ствола и нет центра — любая точка соединяется с любой другой, поэтому сеть невозможно вырубить: срезанная ветвь прорастает сбоку.</p>
+        <p>Мы не продаём вечеринку. Мы расширяем сеть. Билет — это допуск, но не статус. Статус появляется в тот момент, когда через тебя приходит другой человек.</p>
+        <p>Здесь не считают подписчиков. Здесь считают <strong>узлы</strong>: людей, за которых ты поручился своим кодом. Чем плотнее твоя ветвь, тем глубже уровень допуска.</p>
+      </div>
+      <dl class="manifest__side">
+        <dt>Город</dt><dd>Санкт-Петербург.</dd>
+        <dt>Звук</dt><dd>electronic · techno · witchhouse · idm</dd>
+        <dt>Форматы</dt><dd>OPEN-AIR, video lounge, маркет, тату-сессии.</dd>
+        <dt>Возраст</dt><dd>18+. Вход по билету или по узлу.</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ АФИША ============================ -->
+<section class="sec sec--sunken" id="events" aria-labelledby="h-events">
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">02 / Афиша</span><span>Ближайшее и дальше</span></div>
+    <h2 class="slab" id="h-events" style="margin-bottom:var(--s5)">Афиша</h2>
+    <div class="events" id="eventsList"></div>
+  </div>
+</section>
+
+<!-- ============================ СОБЫТИЕ ============================ -->
+<section class="sec" id="event" aria-labelledby="h-event">
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">03 / Событие</span><span>12.09.2026 · 22:00 · 18+</span></div>
+    <h2 class="slab" id="h-event">Video<br>Lounge</h2>
+    <p class="ref__lead" style="max-width:52ch;margin:var(--s3) 0 var(--s5)">
+      Одна ночь на Грузинской: звук едет на грузовике, экраны работают всю ночь, рядом — маркет и тату-сессии.
+    </p>
+
+    <div class="format" id="formatGrid"></div>
+
+    <div class="sechead mono" style="margin-top:var(--s7)"><span class="idx">Лайн-ап</span><span>7 артистов</span></div>
+    <div class="lineup" id="lineupGrid"></div>
+
+    <div class="rosters">
+      <div class="roster">
+        <div class="sechead mono"><span class="idx">Tattoo</span><span><a href="https://t.me/udel_com/3757" target="_blank" rel="noopener">by UDEL ↗</a></span></div>
+        <ul id="tattooList"></ul>
+      </div>
+      <div class="roster">
+        <div class="sechead mono"><span class="idx">Market</span><span>Мерч · вещи · графика</span></div>
+        <ul id="marketList"></ul>
+      </div>
+    </div>
+
+    <div class="place">
+      <div>
+        <div class="mono muted">Место</div>
+        <h3 class="tier__name" style="font-size:clamp(24px,3vw,34px);margin:8px 0 0">Грузинская ул., 3к1Б</h3>
+        <p class="muted" style="margin:8px 0 0;font-size:15px">Санкт-Петербург. Площадка открытая — одевайся по погоде.</p>
+        <a class="btn btn--flat" style="margin-top:var(--s3)" href="https://yandex.ru/maps/?pt=30.365329,59.897077&amp;z=17&amp;l=map" target="_blank" rel="noopener">Открыть на карте ↗</a>
+      </div>
+      <dl class="place__meta mono">
+        <dt>Дата</dt><dd>12 сентября 2026, суббота</dd>
+        <dt>Начало</dt><dd>22:00</dd>
+        <dt>Координаты</dt><dd>59.897077, 30.365329</dd>
+        <dt>Возраст</dt><dd>18+</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ БИЛЕТЫ ============================ -->
+<section class="sec" id="tickets" aria-labelledby="h-tickets">
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">04 / Билеты</span><span id="ticketsHint">Цены уточняются · оплата на сайте тестовая</span></div>
+    <h2 class="slab" id="h-tickets" style="margin-bottom:var(--s5)">Допуск</h2>
+    <div class="tickets" id="ticketsGrid"></div>
+  </div>
+</section>
+
+<!-- ============================ РЕФЕРАЛЬНАЯ ШКАЛА ============================ -->
+<section class="sec ref" id="referral" aria-labelledby="h-ref">
+  <canvas id="netRef" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">05 / Сеть</span><span>Экономика ветви</span></div>
+    <h2 class="slab" id="h-ref" style="margin-bottom:var(--s4)">Твоя<br>сеть</h2>
+    <div class="ref__grid">
+      <div>
+        <p class="ref__lead">Ссылка — это твой отросток. Каждый, кто прошёл по ней и получил допуск, становится узлом твоей ветви и поджигает следующий кластер в общей сети.</p>
+        <p class="muted" style="font-size:15px">Лестница из десяти уровней. Верхний — «пожизненная максимальная проходка»: все форматы, навсегда, и твой именной тотем навсегда вшивается в генеративную сеть этого сайта — публичный зал основателей.</p>
+        <div style="margin-top:var(--s4);display:flex;gap:var(--s2) var(--s4);flex-wrap:wrap;align-items:center">
+          <button class="btn btn--toxic" data-goto="#cabinet">Активировать узел</button>
+          <button class="btn btn--flat" data-buy="regular">Сразу взять билет →</button>
+        </div>
+      </div>
+      <ol class="ladder" id="ladder"></ol>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ КАБИНЕТ ============================ -->
+<section class="sec" id="cabinet" aria-labelledby="h-cab">
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">06 / Узел</span><span>Личный кабинет</span></div>
+    <h2 class="slab slab--outline" id="h-cab" style="margin-bottom:var(--s5)">Узел</h2>
+    <div class="cab">
+      <div class="cab__panel" id="cabPanel"><!-- рендерится JS --></div>
+      <div class="cab__viz">
+        <canvas id="netCab" aria-hidden="true"></canvas>
+        <div class="cab__vizmeta mono">
+          <span>Ветвь: <b id="vizCount">0</b> узл.</span>
+          <span id="vizTier">TIER_00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ СВОИ (контакты Telegram) ============================ -->
+<section class="sec sec--sunken" id="crew" aria-labelledby="h-crew">
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">07 / Свои</span><span id="crewCount">—</span></div>
+    <h2 class="slab" id="h-crew" style="margin-bottom:var(--s3)">Свои</h2>
+    <p class="ref__lead" style="max-width:58ch">
+      Кто из знакомых уже взял допуск. Список строит бот по своим записям о ссылках:
+      твоя ветвь, тот кто позвал тебя, и соседи по ветви. Адресную книгу Telegram
+      не отдаёт ни сайту, ни боту — поэтому здесь только те, кого связала сеть.
+    </p>
+    <div class="crew__bar">
+      <span class="src" id="crewSrc">Источник: <b>—</b></span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn--flat" data-goto="#cabinet">Взять свою ссылку →</button>
+        <button class="btn btn--ghost" id="crewInvite">Позвать своих</button>
+      </div>
+    </div>
+    <div id="crewBody"><!-- рендерится JS --></div>
+  </div>
+</section>
+
+<!-- ============================ FAQ ============================ -->
+<section class="sec" aria-labelledby="h-faq">
+  <div class="wrap">
+    <div class="sechead mono"><span class="idx">08 / Вопросы</span><span>Честно и коротко</span></div>
+    <h2 class="slab" id="h-faq" style="margin-bottom:var(--s5)">FAQ</h2>
+    <div class="faq">
+      <details open>
+        <summary><span class="mono muted">01</span> Оплата здесь настоящая?</summary>
+        <div class="faq__a"><p>Нет. Форма чекаута — <b>имитация платёжного шлюза</b> с настоящей валидацией (алгоритм Луна, срок действия, CVV, определение платёжной системы), но без сети и без провайдера. Введённые данные карты никуда не отправляются и нигде не сохраняются — они живут только в памяти вкладки и стираются при закрытии формы. Деньги не списываются, билет не выдаётся.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">02</span> Как засчитывается реферал?</summary>
+        <div class="faq__a"><p>Переход по ссылке <code>?ref=КОД</code> сохраняет атрибуцию на 30 дней. Узел засчитывается только после успешной тестовой оплаты и только <b>один раз на уникального покупателя</b> (ключ — e-mail): повторная оплата, обновление страницы или двойной сабмит счётчик не двигают. Отказ по карте узел не создаёт.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">03</span> Где хранятся коды и прогресс?</summary>
+        <div class="faq__a"><p>В <code>localStorage</code> твоего браузера: <code>rizzoma_mock_db</code>, <code>rizzoma_me</code>, <code>rizzoma_attribution</code>. Это демо-уровень, а не защищённый от фрода продакшн: данные локальны для одного браузера, их можно отредактировать из консоли, и они не синхронизируются между устройствами. В боевой версии это заменяется сервером, реальным платёжным провайдером и серверной анти-фрод проверкой атрибуции.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">04</span> Куда и во сколько идти?</summary>
+        <div class="faq__a"><p>Санкт-Петербург, <b>Грузинская ул., 3к1Б</b> — координаты 59.897077, 30.365329. Начало 12 сентября 2026 в 22:00. Площадка открытая (open-air), звук приезжает на грузовике — сентябрьской ночью в Петербурге стоит одеться теплее.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">05</span> Есть возрастное ограничение?</summary>
+        <div class="faq__a"><p>Да, <b>18+</b>. Возьми документ — на входе могут попросить подтвердить возраст.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">06</span> Тату и маркет — как попасть?</summary>
+        <div class="faq__a"><p>Тату-сессии ведёт <b>UDEL</b>: SHILO, hush, Подкожный. Работы, слоты и условия — <a href="https://t.me/udel_com/3757" target="_blank" rel="noopener" style="color:var(--accent-toxic)">в канале UDEL ↗</a>. Маркет работает всю ночь: grossma, D3N и другие.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">07</span> Можно ли пригласить самого себя?</summary>
+        <div class="faq__a"><p>Нет. Если код в ссылке совпадает с твоим собственным, атрибуция игнорируется. Это простейшая защита демо-уровня — она не заменяет серверную проверку устройств и платежей.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">08</span> Сколько стоит билет?</summary>
+        <div class="faq__a"><p>Цены тарифов пока не объявлены — в карточках стоит «уточняется». Экономика билетов и лестницы наград правится в двух массивах кода: <code>TICKETS</code> и <code>TIERS</code>. Оплата на этом сайте в любом случае тестовая: реальная продажа требует подключения платёжного провайдера.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">09</span> Откуда берётся список «Свои»?</summary>
+        <div class="faq__a"><p>Не из адресной книги — её Telegram не отдаёт ни мини-приложению, ни боту, и обмен номером (<code>requestContact</code>) этого не меняет: он сообщает серверу твой номер, а не твоих знакомых. Список строится из того, что бот знает точно: <b>кто пришёл по твоей ссылке</b>, <b>кто позвал тебя</b> и <b>кто стоит с тобой в одной ветви</b> — всё это записывается при переходе по диплинку <code>startapp</code>. Ветвь видна сразу; чтобы подтянулись соседи и пригласивший, нужно один раз привязать аккаунт через бота. Пока бэкенд не подключён, в списке лежат вымышленные контакты с пометкой <code>ДЕМО</code>.</p></div>
+      </details>
+      <details>
+        <summary><span class="mono muted">10</span> Это сайт или мини-приложение Telegram?</summary>
+        <div class="faq__a"><p>Одна и та же страница работает и так, и так. Открытая в Telegram, она подхватывает <code>telegram-web-app.js</code>: разворачивается на весь экран, отдаёт оплату системной кнопке MainButton, закрывается системной BackButton, добавляет тактильный отклик и синхронизирует прогресс через <code>CloudStorage</code> — так узел переживает смену устройства. Реферальная ссылка внутри Telegram выглядит как <code>t.me/бот/апп?startapp=КОД</code>, снаружи — как <code>?ref=КОД</code>; обе ведут в одну и ту же механику. Инструкция по установке — в <code>README.md</code>.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <div class="foot__brand">
+          <svg class="mark" aria-hidden="true"><use href="#rz-logo"/></svg>
+          <div class="slab" style="font-size:clamp(40px,9vw,110px)">RIZZOMA</div>
+        </div>
+        <p class="mono muted" style="margin:var(--s2) 0 0">Санкт-Петербург · electronic / techno / witchhouse / idm · 18+</p>
+      </div>
+      <nav class="mono" aria-label="Ссылки">
+        <a href="https://t.me/udel_com/3757" target="_blank" rel="noopener">Тату by UDEL ↗</a>
+        <a href="https://yandex.ru/maps/?pt=30.365329,59.897077&amp;z=17&amp;l=map" target="_blank" rel="noopener">Грузинская 3к1Б ↗</a>
+        <span class="ph">[соцсети — добавить ссылки]</span>
+      </nav>
+    </div>
+    <p class="disclaimer mono">Оплата на этом сайте — имитация: карты не обрабатываются, деньги не списываются, билет не выдаётся. Для реальной продажи нужен платёжный провайдер. Цены тарифов не подтверждены организаторами. © 2026 RIZZOMA.</p>
+  </div>
+</footer>
+
+<!-- ============================ CHECKOUT ============================ -->
+<div class="modal" id="checkout" role="dialog" aria-modal="true" aria-labelledby="coTitle" hidden>
+  <div class="modal__scrim" data-close></div>
+  <div class="sheet" role="document">
+    <button class="sheet__close" data-close aria-label="Закрыть чекаут">✕</button>
+    <aside class="sheet__aside">
+      <div class="mono muted">Заказ</div>
+      <h3 id="coTitle" class="tier__name" style="font-size:32px">—</h3>
+      <p class="muted" style="font-size:14px;margin:0" id="coDesc">—</p>
+      <div class="order"><span class="mono muted">К оплате</span><span class="sum" id="coSum">—</span></div>
+      <p class="attrline" id="coAttr">Атрибуция: нет</p>
+      <div class="testbanner">Тестовый платёж<br>Деньги не списываются. Данные карты никуда не отправляются.</div>
+      <div class="testcards">
+        <div class="t">Тестовые карты · клик подставляет</div>
+        <button type="button" data-fill="4242424242424242"><span>4242 4242 4242 4242</span><span class="ok">успех</span></button>
+        <button type="button" data-fill="4000000000000002"><span>4000 0000 0000 0002</span><span class="no">отказ</span></button>
+      </div>
+    </aside>
+    <div class="sheet__main" id="coMain"><!-- форма/результат рендерятся JS --></div>
+  </div>
+</div>
+
+<!-- ============================ DEV PANEL (QA) ============================ -->
+<aside class="dev" id="dev" aria-label="QA-панель">
+  <h5>QA · Dev panel</h5>
+  <p>Инструмент тестирования. В боевую версию не попадает — включается только через <code>?devpanel=1</code>.</p>
+  <div class="dev__row">
+    <button data-dev="+1">+1 реферал</button>
+    <button data-dev="+5">+5 рефералов</button>
+    <button data-dev="link">Тест-ссылка</button>
+    <button data-dev="forget">Сбросить атрибуцию</button>
+  </div>
+  <input id="devCode" placeholder="код узла" maxlength="8" aria-label="Код узла для входа">
+  <div class="dev__row">
+    <button data-dev="login">Войти как узел</button>
+    <button data-dev="reset">Сбросить всё</button>
+  </div>
+  <div class="dev__out" id="devOut">—</div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============================================================
+   RIZZOMA — единый клиентский слой
+   ⚠ ДЕМО: вся «БД» рефералов и «платежи» живут в localStorage.
+   Для продакшна это заменяется сервером + реальным платёжным
+   провайдером; атрибуция и анти-фрод должны считаться на бэкенде.
+   ============================================================ */
+(() => {
+'use strict';
+
+/* ============================================================
+   0-A. TELEGRAM MINI APP — мост
+   Страница одна и та же для веба и для Telegram. Внутри Telegram
+   включаются: expand + safe-area, MainButton/BackButton, haptics,
+   CloudStorage (прогресс переживает смену устройства) и диплинк
+   ?startapp=КОД вместо ?ref=КОД.
+   Всё через isVersionAtLeast — на старых клиентах молча деградирует.
+   ============================================================ */
+const CFG = Object.assign({bot:'', app:'', apiBase:'', crewDemo:true}, window.RIZZOMA_CONFIG || {});
+const WA  = (window.Telegram && window.Telegram.WebApp) || null;
+const inTG = !!(WA && WA.initData !== undefined && WA.platform && WA.platform !== 'unknown');
+
+const TG = {
+  on: inTG,
+  user: (inTG && WA.initDataUnsafe && WA.initDataUnsafe.user) || null,
+  v(x){ try { return inTG && WA.isVersionAtLeast && WA.isVersionAtLeast(x); } catch(e){ return false; } },
+  startParam(){ try { return (inTG && WA.initDataUnsafe && WA.initDataUnsafe.start_param) || ''; } catch(e){ return ''; } },
+
+  haptic(kind, arg){
+    if(!TG.v('6.1') || !WA.HapticFeedback) return;
+    try {
+      if(kind === 'notify') WA.HapticFeedback.notificationOccurred(arg || 'success');
+      else if(kind === 'select') WA.HapticFeedback.selectionChanged();
+      else WA.HapticFeedback.impactOccurred(arg || 'light');
+    } catch(e){}
+  },
+
+  /* системная кнопка оплаты */
+  _mainCb: null,
+  mainShow(text, cb){
+    if(!inTG || !WA.MainButton) return false;
+    try {
+      if(TG._mainCb) WA.MainButton.offClick(TG._mainCb);
+      TG._mainCb = cb; WA.MainButton.onClick(cb);
+      if(TG.v('6.1')) WA.MainButton.setParams({text, color:'#B6FF3C', text_color:'#08080A'});
+      else WA.MainButton.setText(text);
+      WA.MainButton.enable(); WA.MainButton.show();
+      document.documentElement.classList.add('tg-mainbtn');
+      return true;
+    } catch(e){ return false; }
+  },
+  mainProgress(on){
+    if(!inTG || !WA.MainButton) return;
+    try { on ? (WA.MainButton.showProgress(true), WA.MainButton.disable())
+             : (WA.MainButton.hideProgress(), WA.MainButton.enable()); } catch(e){}
+  },
+  mainHide(){
+    if(!inTG || !WA.MainButton) return;
+    try {
+      WA.MainButton.hideProgress(); WA.MainButton.hide();
+      if(TG._mainCb){ WA.MainButton.offClick(TG._mainCb); TG._mainCb = null; }
+      document.documentElement.classList.remove('tg-mainbtn');
+    } catch(e){}
+  },
+
+  /* системная кнопка «назад» */
+  _backCb: null,
+  back(show, cb){
+    if(!inTG || !WA.BackButton) return;
+    try {
+      if(TG._backCb){ WA.BackButton.offClick(TG._backCb); TG._backCb = null; }
+      if(show){ TG._backCb = cb; WA.BackButton.onClick(cb); WA.BackButton.show(); }
+      else WA.BackButton.hide();
+      document.documentElement.classList.toggle('tg-back', !!show);
+    } catch(e){}
+  },
+
+  /* шаринг ссылки: системный лист выбора чата */
+  share(url, text){
+    if(!inTG) return false;
+    try {
+      WA.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(url) +
+                          '&text=' + encodeURIComponent(text || ''));
+      return true;
+    } catch(e){ return false; }
+  },
+
+  /* CloudStorage: зеркало localStorage, привязанное к аккаунту Telegram */
+  cloud(){ return (TG.v('6.9') && WA.CloudStorage) ? WA.CloudStorage : null; }
+};
+
+if(inTG){
+  document.documentElement.classList.add('tg');
+  try {
+    WA.ready(); WA.expand();
+    if(TG.v('6.1')){ WA.setHeaderColor('#08080A'); WA.setBackgroundColor('#08080A'); }
+    if(TG.v('6.2') && WA.enableClosingConfirmation) WA.enableClosingConfirmation();
+    if(TG.v('7.7') && WA.disableVerticalSwipes) WA.disableVerticalSwipes();
+
+    const syncViewport = () => {
+      const root = document.documentElement.style;
+      root.setProperty('--tg-vh', (WA.viewportStableHeight || innerHeight) + 'px');
+      const safe = WA.safeAreaInset || {}, content = WA.contentSafeAreaInset || {};
+      root.setProperty('--tg-top', ((safe.top || 0) + (content.top || 0)) + 'px');
+      root.setProperty('--tg-bottom', ((safe.bottom || 0) + (content.bottom || 0)) + 'px');
+    };
+    syncViewport();
+    ['viewportChanged','safeAreaChanged','contentSafeAreaChanged']
+      .forEach(ev => { try { WA.onEvent(ev, syncViewport); } catch(e){} });
+  } catch(e){}
+}
+
+/* ---------- 0. окружение ---------- */
+// ?reduce=1 — QA-переключатель, чтобы проверить статичный режим без системной настройки
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+  || new URLSearchParams(location.search).get('reduce') === '1';
+if(reduceMotion) document.documentElement.classList.add('reduce');
+if (!reduceMotion) document.documentElement.classList.add('js-motion');
+const isCoarse = matchMedia('(pointer: coarse)').matches;
+const EVENT_DATE = new Date('2026-09-12T22:00:00+03:00');
+
+/* ---------- 1. store (mock db) ---------- */
+const K_DB='rizzoma_mock_db', K_ME='rizzoma_me', K_ATTR='rizzoma_attribution';
+const ATTR_TTL = 30*24*60*60*1000; // 30 дней
+
+/* localStorage — источник правды; CloudStorage Telegram — зеркало,
+   чтобы узел не терялся при смене устройства. Лимит CloudStorage —
+   4096 символов на ключ, поэтому крупный дамп в облако не уезжает. */
+const CLOUD_KEYS = [K_DB, K_ME, K_ATTR];
+const cloudPush = (k, v) => {
+  const c = TG.cloud();
+  if(!c || CLOUD_KEYS.indexOf(k) < 0) return;
+  try { (v === null) ? c.removeItem(k, ()=>{}) : (String(v).length <= 4000 && c.setItem(k, String(v), ()=>{})); } catch(e){}
+};
+const ls = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){} cloudPush(k, v); },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} cloudPush(k, null); }
+};
+/* Первый запуск на новом устройстве: локально пусто, а в облаке узел уже есть. */
+function cloudPull(done){
+  const c = TG.cloud();
+  if(!c) return;
+  try {
+    c.getItems(CLOUD_KEYS, (err, data) => {
+      if(err || !data) return;
+      let adopted = false;
+      CLOUD_KEYS.forEach(k => {
+        if(data[k] && !ls.get(k)){ try { localStorage.setItem(k, data[k]); adopted = true; } catch(e){} }
+      });
+      if(adopted) done && done();
+      else CLOUD_KEYS.forEach(k => { const v = ls.get(k); if(v) cloudPush(k, v); });
+    });
+  } catch(e){}
+}
+
+function loadDB(){
+  const raw = ls.get(K_DB);
+  if (raw) { try { const d=JSON.parse(raw); if(d&&d.users) return {users:d.users||{},buyers:d.buyers||{},profiles:d.profiles||{}}; } catch(e){} }
+  return { users:{}, buyers:{}, profiles:{} };
+}
+let DB = loadDB();
+const saveDB = () => ls.set(K_DB, JSON.stringify(DB));
+
+const ALPHA='ACDEFHJKLMNPRTUVWXY3479';
+function newCode(){
+  let c;
+  do { c=''; for(let i=0;i<6;i++) c+=ALPHA[Math.floor(Math.random()*ALPHA.length)]; }
+  while (DB.users[c]);
+  return c;
+}
+function ensureUser(code, patch){
+  if(!DB.users[code]) DB.users[code] = {code, name:'', email:'', paid:false, referredBy:null, referrals:[], ts:Date.now()};
+  if(patch) Object.assign(DB.users[code], patch);
+  return DB.users[code];
+}
+const me = () => { const c = ls.get(K_ME); return c && DB.users[c] ? c : null; };
+const setMe = c => ls.set(K_ME, c);
+const myUser = () => { const c = me(); return c ? DB.users[c] : null; };
+const refCount = u => (u && u.referrals ? u.referrals.length : 0);
+
+/* ---------- 2. атрибуция ---------- */
+function readAttr(){
+  const raw = ls.get(K_ATTR);
+  if(!raw) return null;
+  try {
+    const a = JSON.parse(raw);
+    if(!a || !a.code || !a.ts) return null;
+    if(Date.now() - a.ts > ATTR_TTL){ ls.del(K_ATTR); return null; }   // TTL 30 дней
+    return a;
+  } catch(e){ return null; }
+}
+function captureRef(){
+  const url = new URL(location.href);
+  let code = url.searchParams.get('ref');
+  // Telegram: t.me/<бот>/<апп>?startapp=КОД → initDataUnsafe.start_param
+  if(!code) code = String(TG.startParam() || '').replace(/^ref[_-]?/i, '');
+  if(!code){ const m = location.pathname.match(/\/r\/([A-Za-z0-9]{4,10})\/?$/); if(m) code = m[1]; }
+  if(!code || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+  code = code.toUpperCase().slice(0,8);
+  if(code === me()) return;                    // защита от самореферала
+  ensureUser(code, {}); saveDB();              // неизвестный код → узел-заглушка (демо)
+  ls.set(K_ATTR, JSON.stringify({code, ts:Date.now()}));
+}
+captureRef();
+
+/* ---------- 3. экономика ---------- */
+const TIERS = [
+  {n:1,  label:'Скидка 20% на билет'},
+  {n:3,  label:'Бесплатная проходка'},
+  {n:5,  label:'Проходка + мерч (капсула движения)'},
+  {n:10, label:'Проходка + мерч + скип очереди / гест-лист'},
+  {n:15, label:'VIP-проходка: доступ в VIP-зону'},
+  {n:25, label:'VIP + лимитированная мерч-капсула'},
+  {n:40, label:'Годовой абонемент на все ивенты + встреча с артистами'},
+  {n:60, label:'Статус «Резидент»: пожизненная скидка 50% + закрытые ивенты'},
+  {n:80, label:'Пожизненная проходка на один формат ивентов'},
+  {n:100,label:'Пожизненная максимальная проходка + именной тотем в сети'}
+];
+const tierIndex = c => { let i=-1; TIERS.forEach((t,k)=>{ if(c>=t.n) i=k; }); return i; };
+const tierName  = c => 'TIER_' + String(tierIndex(c)+1).padStart(2,'0');
+
+/* Цены организаторами не объявлены: price:null → в UI «уточняется».
+   Проставь числа здесь, и карточки с чекаутом подхватят их автоматически. */
+const TICKETS = [
+  {id:'early',   name:'Early',     price:null, note:'первая волна',   hot:false,
+   perks:['Вход с 22:00','Ограниченное количество']},
+  {id:'regular', name:'Regular',   price:null, note:'основная волна', hot:true,
+   perks:['Вход с 22:00','Основной пул мест']},
+  {id:'door',    name:'На входе',  price:null, note:'у ворот',        hot:false,
+   perks:['Оплата на месте','Наличие не гарантируется']}
+];
+const money = n => new Intl.NumberFormat('ru-RU').format(n) + ' ₽';
+const priceLabel = p => p === null ? 'уточняется' : (p === 0 ? '0 ₽' : money(p));
+
+/* Ближайшее событие. Следующие добавляются в этот же массив. */
+const EVENTS = [
+  {
+    id:'video-lounge', title:'Video Lounge', date:EVENT_DATE, soon:true,
+    place:'Грузинская ул., 3к1Б', city:'Санкт-Петербург',
+    tags:['Open-air','7 артистов','Маркет','Тату','18+']
+  }
+];
+
+const FORMAT = [
+  {n:'01', t:'7 артистов', s:'electronic · techno · witchhouse · idm'},
+  {n:'02', t:'Open-air', s:'Звук приезжает на грузовике и играет под открытым небом.'},
+  {n:'03', t:'Тату', s:'Сессии от <a href="https://t.me/udel_com/3757" target="_blank" rel="noopener">UDEL ↗</a>: SHILO, hush, Подкожный.'},
+  {n:'04', t:'Маркет', s:'grossma, D3N и другие — всю ночь.'}
+];
+
+const ACTS   = ['tenseiloveu','TRTSKX.','djsonicl0vek','IZOLYATOR3000','MC EXTSIK','dj sluni','sy1vann'];
+const TATTOO = ['SHILO','hush','Подкожный'];
+const MARKET = ['grossma','D3N','и другие'];
+
+/* ---------- 4. утилиты ---------- */
+const $  = (s,r=document) => r.querySelector(s);
+const $$ = (s,r=document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function mulberry32(a){ return () => { a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+
+let toastTimer;
+function toast(msg){
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+
+/* ============================================================
+   5. ГЕНЕРАТИВНАЯ СЕТЬ — фрактал + трайбл-симметрия
+   Строится один «клин» (рекурсивное ветвление с ломаными
+   сегментами), затем зеркалится и вращается 2×S раз — так
+   получается маска/мандала при копеечной стоимости отрисовки:
+   Path2D на группу глубины, ~70 stroke-вызовов на кадр.
+   ============================================================ */
+function buildWedge(seed, opts){
+  const rnd = mulberry32(seed);
+  const {depth, spread, decay, kink} = opts;
+  const groups = Array.from({length:depth+1}, () => ({seg:new Path2D(), dots:new Path2D(), pts:[]}));
+  const paths = [];
+
+  function branch(x,y,ang,len,d,trail){
+    if(d>depth) return;
+    // ломаный сегмент: середина смещена в сторону — трайбл-ритм вместо прямой
+    const mx = x + Math.cos(ang)*len*0.55 + Math.cos(ang+Math.PI/2)*len*kink*(rnd()<0.5?-1:1);
+    const my = y + Math.sin(ang)*len*0.55 + Math.sin(ang+Math.PI/2)*len*kink*(rnd()<0.5?-1:1);
+    const ex = x + Math.cos(ang)*len, ey = y + Math.sin(ang)*len;
+    const g = groups[d];
+    g.seg.moveTo(x,y); g.seg.lineTo(mx,my); g.seg.lineTo(ex,ey);
+    const r = 0.006 + (depth-d)*0.0016;
+    g.dots.moveTo(ex+r,ey); g.dots.arc(ex,ey,r,0,Math.PI*2);
+    g.pts.push([ex,ey]);
+    const t2 = trail.concat([[ex,ey]]);
+    if(d===depth){ paths.push(t2); return; }
+    const kids = rnd()<0.22 ? 3 : 2;
+    for(let i=0;i<kids;i++){
+      const off = (i - (kids-1)/2) * spread * (0.75 + rnd()*0.5);
+      branch(ex, ey, ang+off, len*decay*(0.85+rnd()*0.3), d+1, t2);
+    }
+  }
+  branch(0,0,-Math.PI/2,0.30,0,[[0,0]]);
+  return {groups, paths};
+}
+
+/* Контур логотипа = ядро сети. Берём тот же path, что и вёрстка (<symbol id="rz-logo">),
+   поэтому источник правды один: заменишь логотип — поменяется и сцена, и фавикон. */
+const LOGO_VB = 499;
+const LOGO_PATH = (() => {
+  const el = document.getElementById('logoPath');
+  try { return el ? new Path2D(el.getAttribute('d')) : null; } catch(e){ return null; }
+})();
+
+function makeScene(canvas, cfg){
+  const ctx = canvas.getContext('2d', {alpha:true});
+  const S = cfg.symmetry;
+  const wedge = buildWedge(cfg.seed, cfg);
+  let W=0,H=0,dpr=1, raf=0, running=false;
+  let mx=0, my=0, tmx=0, tmy=0;          // курсор (сглаженный)
+  let energy = cfg.energy || 0;          // 0..1 — «прожиг» сети
+  let energyTarget = energy;
+  let burst = 0;
+
+  function resize(){
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio||1, isCoarse?2:2);
+    W = Math.max(1, r.width); H = Math.max(1, r.height);
+    canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+    draw(0);
+  }
+
+  function draw(t){
+    const cx = W*cfg.cx, cy = H*cfg.cy;
+    const base = Math.min(W,H);
+    // «камера»: скролл двигает масштаб и поворот — один осмысленный проезд
+    let p = 0;
+    if(cfg.scrollDrive){
+      const rect = canvas.getBoundingClientRect();
+      p = Math.min(1, Math.max(0, -rect.top / Math.max(1, rect.height)));
+    }
+    const scale = base * (cfg.scale0 + p*cfg.scaleTravel);
+    const rot   = cfg.rot0 + p*cfg.rotTravel + (reduceMotion?0:t*cfg.spin) + mx*0.12;
+    const tilt  = 1 - Math.abs(my)*0.18;
+
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+    ctx.lineCap='round'; ctx.lineJoin='round';
+
+    const lit = energy + burst*0.35;
+    for(let d=0; d<wedge.groups.length; d++){
+      const g = wedge.groups[d];
+      const depthT = d/(wedge.groups.length-1);
+      // «поджиг» идёт от центра наружу по мере роста ветви
+      // «прожиг» идёт от центра наружу: базовый слой всегда электро-фиолетовый,
+      // поверх него — токсично-зелёный слой с альфой = степень разлочки.
+      // Никакой интерполяции по кругу оттенков (она даёт мутный cyber-cyan).
+      const on = Math.max(0, Math.min(1, (lit - depthT*0.85) * 3));
+      const a  = (0.09 + (1-depthT)*0.26) * (cfg.alpha||1) * (1 - p*0.5);
+      if(a<=0.004 && on<=0.01) continue;
+      // толщина в экранных px, делится на масштаб трансформы
+      ctx.lineWidth = Math.max(0.4, (1.6 - depthT) * (cfg.weight||1)) / scale;
+
+      for(let k=0;k<S;k++){
+        for(let m=0;m<2;m++){
+          ctx.setTransform(dpr,0,0,dpr,0,0);
+          ctx.translate(cx + mx*base*0.02, cy + my*base*0.02);
+          ctx.rotate(rot + k*(Math.PI*2/S));
+          ctx.scale(scale*(m?-1:1), scale*tilt);
+          ctx.strokeStyle = `oklch(0.52 0.22 300 / ${a.toFixed(3)})`;
+          ctx.fillStyle   = `oklch(0.68 0.20 300 / ${Math.min(1,a*2.1).toFixed(3)})`;
+          ctx.stroke(g.seg); ctx.fill(g.dots);
+          if(on>0.01){
+            const ha = Math.min(1, on*(0.5 + a*2.4));
+            ctx.strokeStyle = `oklch(0.86 0.21 128 / ${ha.toFixed(3)})`;
+            ctx.fillStyle   = `oklch(0.94 0.20 128 / ${Math.min(1,ha*1.5).toFixed(3)})`;
+            ctx.stroke(g.seg); ctx.fill(g.dots);
+          }
+        }
+      }
+    }
+
+    // ЯДРО СЕТИ — контур логотипа в цветах проекта.
+    // При скролле знак наезжает вместе с «камерой» и растворяется: проезд сквозь него.
+    if(LOGO_PATH && cfg.logo){
+      const la = Math.max(0, 1 - p*1.7);
+      if(la > 0.01){
+        const breathe = reduceMotion ? 1 : 1 + Math.sin(t*0.0008)*0.018;
+        const k = base * cfg.logo * (1 + p*1.6) * breathe / LOGO_VB;
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.translate(cx + mx*base*0.03, cy + my*base*0.03);
+        ctx.scale(k, k);
+        ctx.translate(-LOGO_VB/2, -LOGO_VB/2);
+        // подложка: ветви не просвечивают сквозь знак
+        ctx.fillStyle = `rgba(8,8,10,${(0.7*la).toFixed(3)})`;
+        ctx.fill(LOGO_PATH,'evenodd');
+        ctx.fillStyle = `oklch(0.52 0.22 300 / ${(0.14*la).toFixed(3)})`;
+        ctx.fill(LOGO_PATH,'evenodd');
+        // свечение имитируем широким полупрозрачным штрихом — дешевле shadowBlur
+        ctx.lineWidth = 10/k;
+        ctx.strokeStyle = `oklch(0.55 0.24 300 / ${(0.14*la).toFixed(3)})`;
+        ctx.stroke(LOGO_PATH);
+        ctx.lineWidth = 2.2/k;
+        ctx.strokeStyle = `oklch(0.64 0.24 300 / ${(0.92*la).toFixed(3)})`;
+        ctx.stroke(LOGO_PATH);
+        if(lit > 0.02){                                   // разлочка тира поджигает и знак
+          const ta = Math.min(1, lit*1.3) * la;
+          ctx.lineWidth = 7/k;
+          ctx.strokeStyle = `oklch(0.86 0.21 128 / ${(ta*0.2).toFixed(3)})`;
+          ctx.stroke(LOGO_PATH);
+          ctx.lineWidth = 2.2/k;
+          ctx.strokeStyle = `oklch(0.9 0.21 128 / ${ta.toFixed(3)})`;
+          ctx.stroke(LOGO_PATH);
+        }
+      }
+    }
+
+    // «разряды», идущие от корня к листу
+    if(!reduceMotion && cfg.charges){
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.translate(cx + mx*base*0.02, cy + my*base*0.02);
+      for(let i=0;i<cfg.charges;i++){
+        const path = wedge.paths[(i*7)%wedge.paths.length];
+        if(!path) continue;
+        const prog = ((t*0.00022*(0.6+i*0.12)) + i/cfg.charges) % 1;
+        const f = prog*(path.length-1);
+        const i0 = Math.floor(f), lerp = f-i0;
+        const a0 = path[i0], a1 = path[Math.min(path.length-1,i0+1)];
+        const px = a0[0]+(a1[0]-a0[0])*lerp, py = a0[1]+(a1[1]-a0[1])*lerp;
+        const k = (i*3)%S;
+        const ang = rot + k*(Math.PI*2/S);
+        const ca = Math.cos(ang), sa = Math.sin(ang);
+        const X = (px*ca - py*sa)*scale, Y = (px*sa + py*ca)*scale*tilt;
+        ctx.beginPath();
+        ctx.fillStyle = `oklch(0.92 0.19 ${lit>0.5?128:300} / ${(0.85*(1-prog*0.5)).toFixed(3)})`;
+        ctx.arc(X, Y, 1.8 + (1-prog)*1.6, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+
+  function loop(t){
+    mx += (tmx-mx)*0.06; my += (tmy-my)*0.06;
+    energy += (energyTarget-energy)*0.05;
+    if(burst>0) burst = Math.max(0, burst-0.012);
+    draw(t);
+    raf = requestAnimationFrame(loop);
+  }
+  function start(){ if(running||reduceMotion) return; running=true; raf=requestAnimationFrame(loop); }
+  function stop(){ running=false; cancelAnimationFrame(raf); }
+
+  addEventListener('resize', resize, {passive:true});
+  if(!reduceMotion && !isCoarse && cfg.pointer){
+    addEventListener('pointermove', e => {
+      tmx = (e.clientX/innerWidth  - 0.5)*2;
+      tmy = (e.clientY/innerHeight - 0.5)*2;
+    }, {passive:true});
+    addEventListener('deviceorientation', e => {
+      if(e.gamma!=null){ tmx = Math.max(-1,Math.min(1,e.gamma/45)); tmy = Math.max(-1,Math.min(1,(e.beta-45)/45)); }
+    }, {passive:true});
+  }
+  if(cfg.scrollDrive && !reduceMotion) addEventListener('scroll', ()=>{ if(!running) draw(performance.now()); }, {passive:true});
+
+  // пауза, когда сцена вне экрана — не жжём батарею
+  new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? start() : stop()), {threshold:0.02}).observe(canvas);
+
+  resize();
+  return {
+    setEnergy(v, withBurst){ energyTarget = Math.max(0, Math.min(1, v)); if(withBurst){ burst = 1; if(reduceMotion) { energy = energyTarget; draw(0); } } if(reduceMotion){ energy=energyTarget; draw(0);} },
+    redraw: () => draw(performance.now())
+  };
+}
+
+const heroScene = makeScene($('#net'), {
+  seed: 20261114, symmetry: isCoarse?5:7, depth: isCoarse?5:6,
+  spread: 0.62, decay: 0.74, kink: 0.16,
+  cx:0.5, cy:0.38, scale0:0.54, scaleTravel:1.7, rot0:0, rotTravel:0.5,
+  spin: 0.000018, alpha:1, weight:1, charges: isCoarse?4:9, logo:0.27,
+  pointer:true, scrollDrive:true, energy:0.05
+});
+const refScene = makeScene($('#netRef'), {
+  seed: 480921, symmetry: isCoarse?6:9, depth: isCoarse?4:5,
+  spread:0.58, decay:0.76, kink:0.13,
+  cx:0.62, cy:0.5, scale0:0.62, scaleTravel:0, rot0:0.9, rotTravel:0,
+  spin:0.000009, alpha:0.9, weight:0.9, charges:isCoarse?3:7, logo:0.32,
+  pointer:true, scrollDrive:false, energy:0.05
+});
+const cabScene = makeScene($('#netCab'), {
+  seed: 771103, symmetry:5, depth: isCoarse?4:5,
+  spread:0.66, decay:0.72, kink:0.2,
+  cx:0.5, cy:0.5, scale0:0.40, scaleTravel:0, rot0:0.3, rotTravel:0,
+  spin:0.000012, alpha:1, weight:1.15, charges:isCoarse?3:6, logo:0.40,
+  pointer:false, scrollDrive:false, energy:0
+});
+
+/* ---------- 6. hero: буквы, счётчик, таймер ---------- */
+(() => {
+  const h1 = $('#heroTitle');
+  [...'RIZZOMA'].forEach((ch,i) => {
+    const s = document.createElement('span'); s.textContent = ch; s.style.setProperty('--i', i);
+    s.setAttribute('aria-hidden','true'); h1.appendChild(s);
+  });
+})();
+
+function tickCountdown(){
+  const d = EVENT_DATE - Date.now();
+  const el = $('#countdown');
+  if(d<=0){ el.textContent = 'ворота открыты'; return; }
+  const dd = Math.floor(d/86400000), hh = Math.floor(d/3600000)%24,
+        mm = Math.floor(d/60000)%60, ss = Math.floor(d/1000)%60;
+  el.textContent = `${dd}д ${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+tickCountdown(); setInterval(tickCountdown, 1000);
+
+/* ---------- 7. лайн-ап: генеративные сигилы вместо фейковых портретов ---------- */
+function sigil(name){
+  const rnd = mulberry32(hashStr(name));
+  let d = '';
+  const arms = 3 + Math.floor(rnd()*3);
+  for(let a=0;a<arms;a++){
+    let x = 50, y = 92 - a*6, seg = 3 + Math.floor(rnd()*3);
+    let path = `M ${x} ${y}`;
+    for(let s=0;s<seg;s++){
+      const dx = (10 + rnd()*22) * (rnd()<0.5?-1:1);
+      const dy = -(12 + rnd()*20);
+      x += dx*0.5; y += dy*0.6;
+      path += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+      x += dx*0.5;
+      path += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }
+    d += path + ' ';
+  }
+  const dots = Array.from({length:4+Math.floor(rnd()*4)}, () => {
+    const cx = 20+rnd()*60, cy = 12+rnd()*68, r = 0.9+rnd()*2.1;
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="var(--accent-primary)" opacity="0.85"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 100 100" role="img" aria-label="Генеративный знак артиста">
+    <g stroke="var(--ink)" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.85">
+      <g>${`<path d="${d.trim()}"/>`}</g>
+      <g transform="translate(100,0) scale(-1,1)">${`<path d="${d.trim()}"/>`}</g>
+    </g>${dots}</svg>`;
+}
+$('#lineupGrid').innerHTML = ACTS.map((name,i) => `
+  <article class="act rv" style="--d:${i*70}ms">
+    <div class="act__sigil">${sigil(name)}<span class="act__ph mono">[portrait 3:4]</span></div>
+    <h3 class="act__name">${esc(name)}</h3>
+    <div class="act__row mono"><span>${String(i+1).padStart(2,'0')}</span><span>Video Lounge</span></div>
+  </article>`).join('') + `
+  <article class="act act--end rv">
+    <svg class="mark" aria-hidden="true"><use href="#rz-logo"/></svg>
+    <h3 class="act__name">Одна<br>ночь</h3>
+    <div class="act__row mono"><span>22:00 → ?</span></div>
+    <button class="btn btn--flat" data-buy="regular">Взять билет →</button>
+  </article>`;
+
+$('#formatGrid').innerHTML = FORMAT.map((f,i) => `
+  <div class="fmt rv" style="--d:${i*70}ms">
+    <span class="fmt__n">${f.n}</span>
+    <span class="fmt__s">${f.s}</span>
+    <h3 class="fmt__t">${esc(f.t)}</h3>
+  </div>`).join('');
+
+const roster = (arr) => arr.map((n,i) => `<li><i>${String(i+1).padStart(2,'0')}</i>${esc(n)}</li>`).join('');
+$('#tattooList').innerHTML = roster(TATTOO);
+$('#marketList').innerHTML = roster(MARKET);
+
+/* ---------- афиша ---------- */
+const dateParts = d => ({
+  day:   d.toLocaleDateString('ru-RU', {day:'2-digit', timeZone:'Europe/Moscow'}),
+  mm:    d.toLocaleDateString('ru-RU', {month:'2-digit', timeZone:'Europe/Moscow'}),
+  month: d.toLocaleDateString('ru-RU', {month:'long', timeZone:'Europe/Moscow'}),
+  wd:    d.toLocaleDateString('ru-RU', {weekday:'long', timeZone:'Europe/Moscow'}),
+  time:  d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow'}),
+  year:  d.toLocaleDateString('ru-RU', {year:'numeric', timeZone:'Europe/Moscow'})
+});
+$('#eventsList').innerHTML = EVENTS.map(ev => {
+  const p = dateParts(ev.date);
+  return `<article class="ev rv ${ev.soon?'ev--soon':''}">
+    <div class="ev__date"><b>${p.day}.${p.mm}</b><span>${p.month} ${p.year} · ${p.time}</span></div>
+    <div>
+      <h3 class="ev__name">${esc(ev.title)}</h3>
+      <div class="mono muted" style="margin-top:10px">${esc(ev.city)} · ${esc(ev.place)} · ${p.wd}</div>
+      <div class="ev__tags">${ev.tags.map(t=>`<span>${esc(t)}</span>`).join('')}</div>
+    </div>
+    <div class="ev__cta">
+      <button class="btn" data-buy="regular">Билет</button>
+      <button class="btn btn--flat" data-goto="#event">Подробнее →</button>
+    </div>
+  </article>`;
+}).join('') + `
+  <article class="ev ev--tba rv">
+    <div class="ev__date"><b>??</b><span>дата не объявлена</span></div>
+    <div>
+      <h3 class="ev__name" style="color:var(--ink-muted)">Следующее событие</h3>
+      <div class="mono muted" style="margin-top:10px">Анонс появится здесь — узлы сети узнают первыми</div>
+    </div>
+  </article>`;
+
+/* ---------- 8. билеты ---------- */
+/* Итоговая цена: 3+ узла — бесплатно, 1–2 — минус 20%.
+   base === null означает «цена ещё не объявлена». */
+function effPrice(base, c){
+  if(c >= 3) return 0;
+  if(base === null) return null;
+  if(c >= 1) return Math.round(base*0.8);
+  return base;
+}
+function renderTickets(){
+  const c = refCount(myUser());
+  $('#ticketsGrid').innerHTML = TICKETS.map((t,i) => {
+    const price = effPrice(t.price, c);
+    const cut   = price !== t.price;
+    const disc  = c>=3 ? 'Разлочено: бесплатная проходка · TIER_02'
+                : c>=1 ? (t.price===null ? 'Разлочено: −20% к финальной цене · TIER_01' : 'Разлочено: −20% · TIER_01')
+                : '';
+    return `<article class="tier rv ${t.hot?'tier--hot':''}" style="--d:${i*90}ms">
+      ${t.hot?'<span class="tier__flag">Основная волна</span>':''}
+      <div class="tier__top mono"><span>0${i+1}</span><span>${t.hot?'':esc(t.note)}</span></div>
+      <h3 class="tier__name">${esc(t.name)}</h3>
+      <div class="tier__price${price===null?' tier__price--tba':''}">${cut&&t.price!==null?`<s>${money(t.price)}</s>`:''}${priceLabel(price)}</div>
+      ${disc?`<div class="tier__disc">${disc}</div>`:''}
+      <ul>${t.perks.map(p=>`<li>${esc(p)}</li>`).join('')}</ul>
+      <button class="btn ${t.hot?'':'btn--ghost'}" data-buy="${t.id}">Оплатить</button>
+    </article>`;
+  }).join('');
+  observeReveals();
+}
+
+/* ---------- 9. лестница ---------- */
+function renderLadder(){
+  $('#ladder').innerHTML = '';
+  TIERS.forEach((t,i) => {
+    const li = document.createElement('li');
+    li.className = 'step' + (i===TIERS.length-1?' step--final':'');
+    li.dataset.n = t.n;
+    li.innerHTML = `<span class="step__dot" aria-hidden="true"></span>
+      <span class="step__label">${esc(t.label)}</span>
+      <span class="step__n mono">${t.n} узл.</span>`;
+    $('#ladder').appendChild(li);
+  });
+}
+
+/* ---------- 10. кабинет ---------- */
+/* Внутри Telegram ссылка должна открывать Mini App, а не браузер:
+   t.me/<бот>/<апп>?startapp=КОД. Бот и short name задаются в config.js —
+   пока они пустые, отдаём обычную веб-ссылку ?ref=КОД. */
+function refLink(code){
+  if(CFG.bot && CFG.app) return `https://t.me/${CFG.bot}/${CFG.app}?startapp=${code}`;
+  if(CFG.bot)            return `https://t.me/${CFG.bot}?startapp=${code}`;
+  const u = new URL(location.href);
+  u.search = '?ref=' + code; u.hash = '';
+  return u.toString();
+}
+const SHARE_TEXT = 'RIZZOMA · VIDEO LOUNGE, 12.09.2026, СПб. Заходи по моему узлу — сеть растёт.';
+/* Общий шаринг: в Telegram — системный лист выбора чата, в вебе — Web Share / буфер. */
+async function shareRef(code){
+  const url = refLink(code);
+  if(TG.share(url, SHARE_TEXT)) return;
+  if(navigator.share){ try { await navigator.share({title:'RIZZOMA', text:SHARE_TEXT, url}); return; } catch(e){} }
+  copy(url, 'Ссылка скопирована');
+}
+function renderCabinet(opts){
+  const u = myUser();
+  const panel = $('#cabPanel');
+  if(!u){
+    panel.innerHTML = `<div class="locked">
+      <div class="mono muted">Статус: узел не активирован</div>
+      <h3 class="tier__name" style="font-size:clamp(26px,3vw,38px)">Тебя ещё нет в сети</h3>
+      <p class="muted" style="margin:0">Активируй узел — получишь личный код и ссылку. Ветвь начнёт расти с первого приглашённого, который прошёл оплату.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn btn--toxic" id="activate">Активировать узел</button>
+        <button class="btn btn--ghost" data-buy="regular">Купить билет</button>
+      </div>
+      <div style="border-top:1px solid var(--line);padding-top:var(--s3);margin-top:var(--s2)">
+        <div class="mono muted">Уже есть код?</div>
+        <div class="field">
+          <input id="claimCode" placeholder="RZ0000" maxlength="8" aria-label="Код узла">
+          <button class="btn btn--ghost" id="claimBtn">Активировать код</button>
+        </div>
+      </div>
+    </div>`;
+    $('#activate').onclick = () => { const c = newCode(); ensureUser(c,{}); saveDB(); setMe(c); renderAll({burst:true}); toast('Узел активирован: '+c); };
+    $('#claimBtn').onclick = () => {
+      const v = ($('#claimCode').value||'').trim().toUpperCase();
+      if(v.length<4) return toast('Код слишком короткий');
+      ensureUser(v,{}); saveDB(); setMe(v); renderAll({burst:true}); toast('Ты в узле '+v);
+    };
+    cabScene.setEnergy(0.05,false); refScene.setEnergy(0.05,false);
+    $('#vizCount').textContent = '0'; $('#vizTier').textContent = 'TIER_00';
+    return;
+  }
+
+  const c = refCount(u), ti = tierIndex(c);
+  const next = TIERS[ti+1], prevN = ti>=0?TIERS[ti].n:0;
+  const pct = next ? Math.min(100, ((c-prevN)/(next.n-prevN))*100) : 100;
+
+  panel.innerHTML = `
+    <div class="mono muted">Статус: ${u.paid?'допуск оплачен':'узел активен, билет не оплачен'}</div>
+    <h3 class="tier__name" style="font-size:clamp(26px,3vw,38px);margin-top:8px">${tierName(c)}</h3>
+    <div class="mono muted" style="margin-top:6px">REF_CODE: <b style="color:var(--accent-toxic)">${esc(u.code)}</b></div>
+    <div class="field">
+      <input id="refLink" readonly value="${esc(refLink(u.code))}" aria-label="Твоя реферальная ссылка">
+      <button class="btn" id="copyLink">Копировать</button>
+    </div>
+    <div class="stat">
+      <div><div class="k">Узлов</div><div class="v" id="cabCount">${c}</div></div>
+      <div><div class="k">Уровень</div><div class="v">${(ti+1)}<span style="font-size:.42em;color:var(--ink-muted)">/${TIERS.length}</span></div></div>
+      <div><div class="k">До следующего</div><div class="v">${next ? (next.n-c) : '—'}</div></div>
+    </div>
+    <div class="mono muted">Прогресс ветви</div>
+    <div class="bar"><i id="cabBar"></i></div>
+    <div class="mono muted">${next ? `${c} / ${next.n} узлов` : 'максимальный уровень достигнут'}</div>
+    ${next ? `<div class="next-reward"><span class="n">Следующая награда</span><span style="font-size:14px;text-align:right">${esc(next.label)}</span></div>`
+           : `<div class="next-reward"><span class="n">Зал основателей</span><span style="font-size:14px;text-align:right">Твой тотем вшит в сеть навсегда</span></div>`}
+    <div class="mono muted" style="margin-top:var(--s4)">Приглашённые узлы</div>
+    ${c ? `<ul class="invites" id="invites">${u.referrals.map((b,i)=>`<li${opts&&opts.fresh===b?' class="fresh"':''}><b>NODE_${String(i+1).padStart(3,'0')}</b><span>${esc(nodeLabel(b))}</span></li>`).reverse().join('')}</ul>`
+        : `<div class="empty">Пока пусто. Отправь ссылку — узел засчитается после успешной тестовой оплаты.</div>`}
+    <div style="margin-top:var(--s3);display:flex;gap:12px;flex-wrap:wrap">
+      ${u.paid ? '' : '<button class="btn btn--ghost" data-buy="regular">Оплатить билет</button>'}
+      <button class="btn btn--flat" id="shareBtn">Поделиться ссылкой →</button>
+    </div>`;
+
+  requestAnimationFrame(()=>{ const b=$('#cabBar'); if(b) b.style.width = pct+'%'; });
+  $('#copyLink').onclick = () => copy(refLink(u.code), 'Ссылка скопирована');
+  $('#shareBtn').onclick = () => { TG.haptic('impact','light'); shareRef(u.code); };
+  $('#vizCount').textContent = c;
+  $('#vizTier').textContent = tierName(c);
+  cabScene.setEnergy(Math.min(1, 0.08 + c/100*0.92), !!(opts&&opts.burst));
+  refScene.setEnergy(Math.min(1, 0.05 + c/100*0.9), !!(opts&&opts.burst));
+  heroScene.setEnergy(Math.min(1, 0.05 + c/100*0.85), !!(opts&&opts.burst));
+}
+const maskEmail = e => { const [a,b] = String(e).split('@'); return b ? a.slice(0,2)+'•••@'+b : String(e).slice(0,6)+'•••'; };
+/* Подпись приглашённого узла: @username из Telegram, если он известен, иначе маска. */
+function nodeLabel(id){
+  const p = DB.profiles && DB.profiles[id];
+  if(p && p.username) return '@' + p.username;
+  if(p && p.name) return p.name;
+  return maskEmail(id);
+}
+
+async function copy(text, msg){
+  try { await navigator.clipboard.writeText(text); toast(msg); }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast(msg); } catch(_) { toast('Скопируй вручную'); }
+    ta.remove();
+  }
+}
+
+/* ============================================================
+   10-B. «СВОИ» — контакты Telegram, которые уже идут
+   ⚠ Ограничение платформы, а не недоделка: у Telegram нет метода
+   «отдай список контактов» — ни для Mini App, ни для бота. Адресная
+   книга недоступна в принципе, и обмен номером (requestContact) её не
+   заменяет: он отдаёт серверу твой номер, а не твоих знакомых.
+   Поэтому список собирается из того, что бот знает по-настоящему:
+     1) твоя ветвь — кто пришёл по твоей ссылке (локально + бэкенд);
+     2) соседи по ветви и тот, кто позвал тебя, — из записей бота
+        о диплинках startapp (CFG.apiBase), после привязки аккаунта;
+     3) демо-контакты — пока бэкенда нет, помечены как ДЕМО.
+   Контракт бэкенда описан в README.md.
+   ============================================================ */
+const DEMO_CREW = [
+  {id:'d1', name:'Ника В.',    username:'nika_void',  status:'paid', tier:2},
+  {id:'d2', name:'Стас Гло',   username:'glo_stas',   status:'paid', tier:1},
+  {id:'d3', name:'Аля',        username:'alya_noir',  status:'paid', tier:0},
+  {id:'d4', name:'Марк Тень',  username:'mark_ten',   status:'node', tier:0},
+  {id:'d5', name:'Рина',       username:'rina_dpt',   status:'paid', tier:1},
+  {id:'d6', name:'Дима Кир',   username:'kir_dmt',    status:'none', tier:0},
+  {id:'d7', name:'Соня',       username:'sonya_wire', status:'none', tier:0},
+  {id:'d8', name:'Лёха 909',   username:'lyokha909',  status:'none', tier:0},
+  {id:'d9', name:'Тася',       username:'tasya_null', status:'none', tier:0}
+].map(m => Object.assign({photo:'', demo:true}, m));
+
+let crewRemote = null;   // ответ бэкенда бота, если он подключён
+let crewLinked = false;  // аккаунт Telegram связан с узлом через /start бота
+
+const initial = s => (String(s).trim()[0] || '·').toUpperCase();
+/* Цвет аватара выводим в oklch вокруг фирменного фиолетового (hue 300 ±50),
+   чтобы placeholder-аватары не вносили в палитру чужих оттенков. */
+const avaColor = s => `oklch(0.62 0.19 ${250 + (hashStr(s) % 100)})`;
+
+async function crewFetch(){
+  if(!CFG.apiBase || !TG.on) return null;
+  try {
+    const r = await fetch(CFG.apiBase.replace(/\/+$/,'') + '/api/friends', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({initData: WA.initData})
+    });
+    if(!r.ok) return null;
+    const j = await r.json();
+    if(!j || !Array.isArray(j.friends)) return null;
+    crewLinked = !!j.linked;
+    return j.friends.map(f => ({
+      id: String(f.id || ''),
+      name: String(f.name || 'Узел'),
+      username: String(f.username || ''),
+      photo: String(f.photo || ''),
+      status: f.status === 'paid' ? 'paid' : (f.status === 'node' ? 'node' : 'none'),
+      tier: +f.tier || 0,
+      demo: false
+    }));
+  } catch(e){ return null; }
+}
+
+/* Связывание аккаунта: бот получает /start link_КОД и с этого момента знает,
+   какой узел за каким Telegram-аккаунтом. Только после этого сервер может
+   отдать ветвь. Адресная книга при этом не читается — её Telegram не отдаёт. */
+function linkAccount(){
+  const u = myUser();
+  if(!u) return toast('Сначала активируй узел');
+  if(!CFG.bot) return toast('Бот не настроен в config.js');
+  const url = `https://t.me/${CFG.bot}?start=link_${u.code}`;
+  if(TG.on){ try { WA.openTelegramLink(url); } catch(e){ location.href = url; } }
+  else window.open(url, '_blank', 'noopener');
+  TG.haptic('impact','light');
+}
+
+function crewGate(){
+  if(!TG.on) return `
+    <div class="gate">
+      <h4>Свои живут в Telegram</h4>
+      <p>Сверка контактов работает только внутри мини-приложения: там есть аккаунт, диплинк и системный обмен номером. В браузере доступны твоя ветвь и общая ссылка.</p>
+      <div class="gate__row">${CFG.bot
+        ? `<a class="btn" href="https://t.me/${esc(CFG.bot)}${CFG.app?'/'+esc(CFG.app):''}" target="_blank" rel="noopener">Открыть в Telegram</a>`
+        : `<span class="src">бот не настроен · config.js</span>`}</div>
+    </div>`;
+  if(!CFG.apiBase) return `
+    <div class="gate">
+      <h4>Живой список выключен</h4>
+      <p>Кто именно уже взял допуск, знает бот — у него записано, кто по чьей ссылке пришёл. Пропиши <b>apiBase</b> в config.js, и вместо демо-контактов здесь появится реальная ветвь.</p>
+    </div>`;
+  if(!crewLinked) return `
+    <div class="gate">
+      <h4>Привязать аккаунт</h4>
+      <p>Бот свяжет твой Telegram с узлом — и покажет, кто пришёл по твоей ссылке, кто позвал тебя и кто стоит с тобой в одной ветви. Адресная книга при этом не читается: Telegram не отдаёт её ни сайту, ни боту.</p>
+      <div class="gate__row"><button class="btn btn--toxic" id="linkAcc">Привязать через бота</button></div>
+    </div>`;
+  return '';
+}
+
+function renderCrew(fresh){
+  const body = $('#crewBody'); if(!body) return;
+  const u = myUser();
+
+  // 1) моя ветвь — всегда доступна, источник правды локальный
+  const mine = (u ? u.referrals : []).map(id => {
+    const p = (DB.profiles || {})[id] || {};
+    return {id, name: p.name || nodeLabel(id), username: p.username || '',
+            photo: p.photo || '', status:'mine', tier:0, demo:false};
+  }).reverse();
+
+  // 2) бэкенд бота или 3) демо
+  const src  = crewRemote || (CFG.crewDemo ? DEMO_CREW : []);
+  const seen = new Set(mine.map(m => m.username).filter(Boolean));
+  const rest = src.filter(m => !m.username || !seen.has(m.username));
+
+  const going  = mine.concat(rest.filter(m => m.status === 'paid' || m.status === 'node'));
+  const invite = rest.filter(m => m.status === 'none');
+
+  const card = (m, mode) => `
+    <article class="mate${mode==='invite'?' mate--invite':''}${fresh && fresh===m.id?' fresh':''}">
+      <div class="ava"${m.photo?'':` style="background:${avaColor(m.username||m.name)}"`}>${
+        m.photo ? `<img src="${esc(m.photo)}" alt="" loading="lazy">` : esc(initial(m.name))}</div>
+      <div>
+        <div class="mate__n">${esc(m.name)}</div>
+        <div class="mate__h">${m.username ? '@'+esc(m.username) : 'узел ветви'}${m.demo?' · демо':''}</div>
+      </div>
+      ${mode === 'invite'
+        ? `<button class="mate__btn" data-invite="${esc(m.username||'')}">Позвать</button>`
+        : `<span class="mate__s ${m.status==='mine'?'mate__s--mine':(m.status==='paid'?'mate__s--paid':'')}${m.demo?' mate__s--demo':''}">${
+            m.status==='mine' ? 'твоя ветвь' : (m.status==='paid' ? 'оплачено' : 'в сети')}</span>`}
+    </article>`;
+
+  body.innerHTML = `
+    ${going.length ? `
+      <div class="crew__sub"><span class="mono muted">Уже идут</span><span class="mono muted">${going.length}</span></div>
+      <div class="crew">${going.map(m => card(m,'going')).join('')}</div>` : `
+      <div class="crew__sub"><span class="mono muted">Уже идут</span><span class="mono muted">0</span></div>
+      <div class="empty">Пока никого. Первый узел появится здесь, как только кто-то пройдёт по твоей ссылке и получит допуск.</div>`}
+    ${invite.length ? `
+      <div class="crew__sub"><span class="mono muted">Можно позвать</span><span class="mono muted">${invite.length}</span></div>
+      <div class="crew">${invite.map(m => card(m,'invite')).join('')}</div>` : ''}
+    ${crewGate()}`;
+
+  const src_ = $('#crewSrc');
+  if(src_){
+    src_.className = 'src' + (crewRemote ? ' src--live' : '');
+    src_.innerHTML = crewRemote
+      ? `Источник: <b>бот${CFG.bot?' · @'+esc(CFG.bot):''}</b>`
+      : `Источник: <b>демо</b> · бэкенд не подключён`;
+  }
+  const cnt = $('#crewCount');
+  if(cnt) cnt.textContent = `${going.length} уже идут · ${invite.length} можно позвать`;
+  const link = $('#linkAcc');
+  if(link) link.onclick = linkAccount;
+}
+
+/* делегирование живёт на постоянном контейнере — переживает перерисовку списка */
+$('#crewBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-invite]');
+  if(!b) return;
+  const u = myUser();
+  if(!u){ toast('Сначала активируй узел'); const el=$('#cabinet');
+    window.scrollTo({top: el.getBoundingClientRect().top + scrollY - 60, behavior: reduceMotion?'auto':'smooth'}); return; }
+  TG.haptic('impact','light');
+  shareRef(u.code);
+});
+$('#crewInvite').addEventListener('click', () => {
+  const u = myUser();
+  if(!u){ toast('Сначала активируй узел'); const el=$('#cabinet');
+    window.scrollTo({top: el.getBoundingClientRect().top + scrollY - 60, behavior: reduceMotion?'auto':'smooth'}); return; }
+  TG.haptic('impact','light');
+  shareRef(u.code);
+});
+
+/* ---------- 11. общий рендер ---------- */
+let lastTier = -99;
+function setLadderFill(ti, total){
+  const l = $('#ladder');
+  if(!l || !total) return;
+  const track = l.getBoundingClientRect().height - 32;
+  l.style.setProperty('--fill', (ti<0 ? 0 : ((ti+1)/total)*track) + 'px');
+}
+function renderAll(opts){
+  const u = myUser(), c = refCount(u);
+  renderTickets();
+  renderCabinet(opts);
+  renderCrew(opts && opts.fresh);
+  // лестница
+  const ti = tierIndex(c);
+  const steps = $$('#ladder .step');
+  steps.forEach((s,i) => {
+    s.classList.toggle('on', i<=ti);
+    s.classList.toggle('next', i===ti+1);
+  });
+  setLadderFill(ti, steps.length);
+  if(ti>lastTier && lastTier!==-99 && steps[ti]){
+    steps[ti].classList.add('burn');
+    setTimeout(()=>steps[ti]&&steps[ti].classList.remove('burn'), 1200);
+    toast('Разлочен ' + tierName(c) + ' · ' + TIERS[ti].label);
+    TG.haptic('notify','success');
+  }
+  lastTier = ti;
+  $('#heroCount').textContent = c;
+  $('#heroTier').textContent  = tierName(c);
+  $('#heroNodes').textContent = 'Nodes: ' + Object.keys(DB.users).length;
+  const attr = readAttr();
+  const co = $('#coAttr');
+  if(co) co.innerHTML = attr ? `Атрибуция: <b>${esc(attr.code)}</b> · истекает через ${Math.ceil((attr.ts+ATTR_TTL-Date.now())/86400000)} дн.` : 'Атрибуция: нет';
+  if($('#devOut')) devLog();
+}
+
+/* ============================================================
+   12. МОК-ЧЕКАУТ — валидация уровня настоящего шлюза
+   Данные карты не покидают вкладку: ничего не отправляется,
+   не логируется и не пишется в localStorage.
+   ============================================================ */
+const TEST_CARDS = { '4242424242424242':'ok', '4000000000000002':'declined' };
+
+function luhn(num){
+  const s = num.replace(/\D/g,'');
+  if(s.length<12) return false;
+  let sum=0, dbl=false;
+  for(let i=s.length-1;i>=0;i--){
+    let d = +s[i];
+    if(dbl){ d*=2; if(d>9) d-=9; }
+    sum += d; dbl = !dbl;
+  }
+  return sum%10===0;
+}
+function detectBrand(num){
+  const s = num.replace(/\D/g,'');
+  if(/^4/.test(s)) return {k:'visa', label:'VISA'};
+  if(/^(5[1-5]|222[1-9]|22[3-9]\d|2[3-6]\d\d|27[01]\d|2720)/.test(s)) return {k:'mc', label:'MASTERCARD'};
+  if(/^220[0-4]/.test(s)) return {k:'mir', label:'МИР'};
+  return null;
+}
+const V = {
+  card(v){
+    const d = v.replace(/\D/g,'');
+    if(!d) return 'Введи номер карты';
+    if(d.length<16) return 'Номер неполный — 16 цифр';
+    if(!detectBrand(d)) return 'Платёжная система не распознана';
+    if(!luhn(d)) return 'Номер не проходит проверку (алгоритм Луна)';
+    return '';
+  },
+  exp(v){
+    const m = v.match(/^(\d{2})\s*\/\s*(\d{2})$/);
+    if(!m) return 'Формат ММ/ГГ';
+    const mm = +m[1], yy = 2000 + +m[2];
+    if(mm<1 || mm>12) return 'Месяц 01–12';
+    const now = new Date();
+    const end = new Date(yy, mm, 1);
+    if(end <= new Date(now.getFullYear(), now.getMonth(), 1)) return 'Срок действия истёк';
+    if(yy > now.getFullYear()+20) return 'Слишком далёкая дата';
+    return '';
+  },
+  cvv(v){ return /^\d{3}$/.test(v) ? '' : 'Три цифры'; },
+  name(v){
+    const s = v.trim();
+    if(!s) return 'Имя держателя обязательно';
+    if(!/^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё\s-]{1,40}$/.test(s)) return 'Только буквы, пробел и дефис';
+    return '';
+  },
+  email(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()) ? '' : 'Формат: name@domain.ru'; }
+};
+
+let currentTicket = null, submitting = false;
+
+function openCheckout(id){
+  currentTicket = TICKETS.find(t=>t.id===id) || TICKETS[1];
+  const c = refCount(myUser());
+  const price = effPrice(currentTicket.price, c);
+  $('#coTitle').textContent = currentTicket.name;
+  $('#coDesc').textContent  = 'VIDEO LOUNGE · 12 сентября 2026, 22:00 · Грузинская ул., 3к1Б · ' + currentTicket.note;
+  $('#coSum').innerHTML = priceLabel(price);
+  $('#coSum').style.fontSize = price===null ? '18px' : '';
+  renderForm(price);
+  const m = $('#checkout'); m.hidden = false; m.classList.add('open');
+  document.body.style.overflow='hidden';
+  TG.back(true, closeCheckout);          // в Mini App закрытие — системной кнопкой «назад»
+  TG.haptic('impact','light');
+  lastFocus = document.activeElement;
+  setTimeout(()=>{ const f=$('#f-card'); if(f) f.focus(); }, 40);
+  renderAll();
+}
+let lastFocus = null;
+function closeCheckout(){
+  const m = $('#checkout'); m.classList.remove('open'); m.hidden = true;
+  document.body.style.overflow='';
+  TG.back(false); TG.mainHide();
+  $('#coMain').innerHTML = '';   // стираем введённые данные карты из DOM
+  submitting = false;
+  if(lastFocus) lastFocus.focus();
+}
+
+function renderForm(price){
+  $('#coMain').innerHTML = `
+    <div class="mono muted">Шаг 1 / 1 · Данные карты</div>
+    <form class="form" id="payForm" novalidate autocomplete="off">
+      <div class="grp" data-f="card">
+        <label for="f-card">Номер карты</label>
+        <div class="inp">
+          <input id="f-card" inputmode="numeric" autocomplete="off" maxlength="19" placeholder="0000 0000 0000 0000">
+          <span class="brand" id="brandTag" hidden></span>
+        </div>
+        <div class="err" id="e-card"></div>
+      </div>
+      <div class="row2">
+        <div class="grp" data-f="exp">
+          <label for="f-exp">Срок действия</label>
+          <div class="inp"><input id="f-exp" inputmode="numeric" maxlength="5" placeholder="ММ/ГГ"></div>
+          <div class="err" id="e-exp"></div>
+        </div>
+        <div class="grp" data-f="cvv">
+          <label for="f-cvv">CVV / CVC</label>
+          <div class="inp"><input id="f-cvv" type="password" inputmode="numeric" maxlength="3" placeholder="•••"></div>
+          <div class="err" id="e-cvv"></div>
+        </div>
+      </div>
+      <div class="grp" data-f="name">
+        <label for="f-name">Имя держателя</label>
+        <div class="inp"><input id="f-name" autocomplete="off" placeholder="IVAN PETROV"></div>
+        <div class="err" id="e-name"></div>
+      </div>
+      <div class="grp" data-f="email">
+        <label for="f-email">E-mail (идентификатор допуска)</label>
+        <div class="inp"><input id="f-email" type="email" autocomplete="off" placeholder="node@rizzoma.fest"></div>
+        <div class="err" id="e-email"></div>
+      </div>
+      <button class="btn submit" type="submit" id="payBtn">Оплатить${price===null?'' : ' ' + priceLabel(price)}</button>
+      <p class="mono muted" style="text-align:center;margin:8px 0 0">Тестовый режим · данные карты не отправляются</p>
+    </form>`;
+
+  const f = {card:$('#f-card'), exp:$('#f-exp'), cvv:$('#f-cvv'), name:$('#f-name'), email:$('#f-email')};
+
+  f.card.addEventListener('input', e => {
+    const d = e.target.value.replace(/\D/g,'').slice(0,16);
+    e.target.value = d.replace(/(.{4})/g,'$1 ').trim();
+    const b = detectBrand(d), tag = $('#brandTag');
+    if(b){ tag.hidden=false; tag.textContent=b.label; tag.dataset.b=b.k; } else tag.hidden=true;
+    if(d.length>=16 || $('#e-card').textContent) check('card');
+  });
+  f.exp.addEventListener('input', e => {
+    let d = e.target.value.replace(/\D/g,'').slice(0,4);
+    if(d.length>=1 && +d[0]>1) d = '0'+d;            // 3 → 03
+    e.target.value = d.length>2 ? d.slice(0,2)+'/'+d.slice(2) : d;
+    if(d.length===4 || $('#e-exp').textContent) check('exp');
+  });
+  f.cvv.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g,'').slice(0,3); if(e.target.value.length===3||$('#e-cvv').textContent) check('cvv'); });
+  f.name.addEventListener('input', () => { if($('#e-name').textContent) check('name'); });
+  f.email.addEventListener('input', () => { if($('#e-email').textContent) check('email'); });
+  Object.keys(f).forEach(k => f[k].addEventListener('blur', () => check(k)));
+
+  function check(k){
+    const val = k==='card' ? f.card.value : f[k].value;
+    const msg = V[k](val);
+    const grp = $(`.grp[data-f="${k}"]`);
+    $('#e-'+k).textContent = msg;
+    grp.classList.toggle('bad', !!msg);
+    grp.classList.toggle('ok', !msg && val.trim().length>0);
+    return !msg;
+  }
+
+  // в Mini App имя держателя подставляем из аккаунта Telegram
+  if(TG.user && !f.name.value){
+    const n = [TG.user.first_name, TG.user.last_name].filter(Boolean).join(' ').trim();
+    if(n && !V.name(n)) f.name.value = n;
+  }
+
+  function doSubmit(){
+    if(submitting) return;                                  // защита от двойного сабмита
+    const okAll = ['card','exp','cvv','name','email'].map(check).every(Boolean);
+    if(!okAll){ const bad = $('.grp.bad input'); if(bad) bad.focus(); TG.haptic('notify','error'); return; }
+    submitting = true;
+    const btn = $('#payBtn');
+    if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin" aria-hidden="true"></span> Проводим платёж'; }
+    TG.mainProgress(true);
+    const digits = f.card.value.replace(/\D/g,'');
+    const email  = f.email.value.trim().toLowerCase();
+    const name   = f.name.value.trim();
+    // имитация сети
+    setTimeout(() => {
+      const verdict = TEST_CARDS[digits] || (Math.random()<0.92 ? 'ok' : 'declined');
+      TG.mainProgress(false);
+      if(verdict === 'ok'){ TG.mainHide(); TG.haptic('notify','success'); showSuccess(settlePurchase({email, name})); }
+      else { submitting = false; TG.mainHide(); TG.haptic('notify','error'); showDecline(); }
+    }, 1100 + Math.random()*400);
+  }
+  $('#payForm').addEventListener('submit', e => { e.preventDefault(); doSubmit(); });
+  /* Системная кнопка Telegram — основной путь оплаты внутри Mini App.
+     В проде здесь вместо мока вызывается WebApp.openInvoice() (см. README). */
+  TG.mainShow('Оплатить' + (price===null ? '' : ' ' + priceLabel(price)), doSubmit);
+
+  $$('#checkout [data-fill]').forEach(b => b.onclick = () => {
+    f.card.value = b.dataset.fill.replace(/(.{4})/g,'$1 ').trim();
+    f.card.dispatchEvent(new Event('input'));
+    if(!f.exp.value){ f.exp.value='12/29'; f.exp.dispatchEvent(new Event('input')); }
+    if(!f.cvv.value){ f.cvv.value='123'; }
+    if(!f.name.value) f.name.value='IVAN PETROV';
+    if(!f.email.value) f.email.value='node'+Math.floor(Math.random()*9999)+'@rizzoma.fest';
+    ['exp','cvv','name','email'].forEach(k=>check(k));
+  });
+}
+
+/* ---------- расчёт покупки и зачисление реферала ---------- */
+function settlePurchase({email, name}){
+  // Вне Telegram уникальный покупатель — e-mail; внутри Mini App — аккаунт
+  // Telegram: id устойчивее (одна покупка на аккаунт, даже с другим e-mail).
+  const buyerId = TG.user ? ('tg:' + TG.user.id) : email;
+  const existing = DB.buyers[buyerId];
+  let code = me();
+
+  if(existing){                                           // повторная покупка — узел не начисляем
+    if(!code) setMe(existing);
+    ensureUser(existing, {paid:true});
+    saveDB();
+    return {code: existing, duplicate:true, credited:null};
+  }
+
+  if(!code){ code = newCode(); ensureUser(code, {}); }
+  const user = ensureUser(code, {paid:true, email:buyerId, name});
+  DB.buyers[buyerId] = code;
+  // профиль покупателя — то, что в проде вернул бы бэкенд бота для списка «Свои»
+  DB.profiles[buyerId] = {
+    name: (TG.user ? [TG.user.first_name, TG.user.last_name].filter(Boolean).join(' ') : '') || name,
+    username: (TG.user && TG.user.username) || '',
+    photo: (TG.user && TG.user.photo_url) || '',
+    ts: Date.now()
+  };
+  setMe(code);
+
+  let credited = null;
+  const attr = readAttr();
+  if(attr && attr.code && attr.code !== code){
+    const ref = ensureUser(attr.code, {});
+    if(!ref.referrals.includes(buyerId)){                  // один раз на покупателя
+      ref.referrals.push(buyerId);
+      credited = attr.code;
+    }
+    if(!user.referredBy) user.referredBy = attr.code;
+  }
+  saveDB();
+  return {code, duplicate:false, credited, buyerId};
+}
+
+/* ---------- экраны результата ---------- */
+function pseudoQR(seed){
+  const N = 25, rnd = mulberry32(hashStr(seed));
+  const cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const x = cv.getContext('2d');
+  x.fillStyle='#fff'; x.fillRect(0,0,N,N);
+  x.fillStyle='#000';
+  for(let i=0;i<N;i++) for(let j=0;j<N;j++) if(rnd()>0.52) x.fillRect(i,j,1,1);
+  [[0,0],[N-7,0],[0,N-7]].forEach(([ox,oy]) => {           // позиционные маркеры
+    x.fillStyle='#fff'; x.fillRect(ox,oy,7,7);
+    x.fillStyle='#000'; x.fillRect(ox,oy,7,1); x.fillRect(ox,oy+6,7,1);
+    x.fillRect(ox,oy,1,7); x.fillRect(ox+6,oy,1,7); x.fillRect(ox+2,oy+2,3,3);
+  });
+  return cv;
+}
+
+function showSuccess(res){
+  const u = DB.users[res.code];
+  const c = refCount(myUser());
+  $('#coMain').innerHTML = `
+    <div class="result">
+      <div class="mono" style="color:var(--accent-toxic)">Тестовый платёж проведён · деньги не списаны</div>
+      <div class="pass">
+        <div>
+          <h4>${esc(currentTicket.name)}</h4>
+          <div class="mono muted">VIDEO LOUNGE · 12.09.2026, 22:00 · Грузинская ул., 3к1Б · 18+</div>
+          <dl>
+            <dt>Держатель</dt><dd>${esc(u.name||'—')}</dd>
+            <dt>Допуск</dt><dd>${esc(res.code)}</dd>
+            <dt>Уровень</dt><dd>${tierName(c)}</dd>
+            <dt>Статус</dt><dd>${res.duplicate?'уже был выдан ранее':'выдан'}</dd>
+          </dl>
+        </div>
+        <div><div class="qr" id="qrBox"></div><div class="qr__cap">QR-ЗАГЛУШКА</div></div>
+      </div>
+      ${res.credited ? `<div class="mono" style="color:var(--accent-toxic)">Узел засчитан ветви ${esc(res.credited)}</div>`
+        : res.duplicate ? `<div class="mono muted">Этот e-mail уже покупал допуск — повторный узел не начислен</div>`
+        : `<div class="mono muted">Реферальная атрибуция не найдена — узел никому не начислен</div>`}
+      <div>
+        <div class="mono muted">Твой реферальный код</div>
+        <div class="field">
+          <input readonly value="${esc(refLink(res.code))}" aria-label="Твоя реферальная ссылка">
+          <button class="btn" id="copyAfter">Копировать</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn btn--toxic" id="toCab">В кабинет узла</button>
+        <button class="btn btn--ghost" id="shareAfter">Позвать своих</button>
+        <button class="btn btn--flat" data-close>Закрыть</button>
+      </div>
+    </div>`;
+  $('#qrBox').appendChild(pseudoQR(res.code));
+  $('#copyAfter').onclick = () => copy(refLink(res.code), 'Ссылка скопирована');
+  $('#shareAfter').onclick = () => { TG.haptic('impact','light'); shareRef(res.code); };
+  $('#toCab').onclick = () => {
+    closeCheckout();
+    const el = $('#cabinet');
+    window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 60, behavior: reduceMotion?'auto':'smooth'});
+  };
+  submitting = false;
+  renderAll({burst:true, fresh:res.buyerId});
+}
+
+function showDecline(){
+  $('#coMain').innerHTML = `
+    <div class="result">
+      <div class="decline">
+        <h4>Платёж отклонён</h4>
+        <p>Банк-эмитент отклонил операцию (код <b>05 · do not honor</b>). Средства не списаны, допуск не выдан, узел рефереру <b>не засчитан</b>.</p>
+      </div>
+      <p class="muted" style="margin:0">Проверь данные карты или попробуй другую. Для успешного сценария используй тестовую карту 4242 4242 4242 4242.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn" id="retry">Повторить попытку</button>
+        <button class="btn btn--flat" data-close>Закрыть</button>
+      </div>
+    </div>`;
+  $('#retry').onclick = () => openCheckout(currentTicket.id);
+  renderAll();
+}
+
+/* ---------- 13. события ---------- */
+document.addEventListener('click', e => {
+  const buy = e.target.closest('[data-buy]');
+  if(buy){ openCheckout(buy.dataset.buy); return; }
+  const goto = e.target.closest('[data-goto]');
+  if(goto){
+    const el = $(goto.dataset.goto);
+    if(el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 60, behavior: reduceMotion?'auto':'smooth'});
+    return;
+  }
+  if(e.target.closest('[data-close]')) closeCheckout();
+});
+document.addEventListener('keydown', e => {
+  const m = $('#checkout');
+  if(m.hidden) return;
+  if(e.key === 'Escape'){ closeCheckout(); return; }
+  if(e.key === 'Tab'){                                     // фокус-ловушка
+    const f = $$('#checkout button, #checkout input, #checkout a[href]').filter(el => !el.disabled && el.offsetParent!==null);
+    if(!f.length) return;
+    const first = f[0], last = f[f.length-1];
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  }
+});
+$$('.nav__links a, .foot a[href^="#"]').forEach(a => a.addEventListener('click', e => {
+  const el = $(a.getAttribute('href'));
+  if(!el) return;
+  e.preventDefault();
+  window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 60, behavior: reduceMotion?'auto':'smooth'});
+}));
+addEventListener('scroll', () => $('#nav').classList.toggle('solid', scrollY>40), {passive:true});
+
+/* ---------- 14. reveal ---------- */
+let io;
+function observeReveals(){
+  if(reduceMotion) return;
+  io = io || new IntersectionObserver(es => es.forEach(en => { if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } }), {rootMargin:'-8% 0px'});
+  $$('.rv:not(.in)').forEach(el => io.observe(el));
+}
+
+/* ---------- 15. звук: генеративный дрон, по умолчанию выключен ---------- */
+let audio = null;
+$('#soundBtn').addEventListener('click', function(){
+  const on = this.getAttribute('aria-pressed') === 'true';
+  if(!on){
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      audio = audio || (() => {
+        const ac = new Ctx();
+        const g = ac.createGain(); g.gain.value = 0;
+        const f = ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420; f.Q.value=6;
+        const o1 = ac.createOscillator(); o1.type='sawtooth'; o1.frequency.value=55;
+        const o2 = ac.createOscillator(); o2.type='sine';     o2.frequency.value=82.5;
+        const lfo = ac.createOscillator(); lfo.frequency.value=0.07;
+        const lg = ac.createGain(); lg.gain.value=140;
+        lfo.connect(lg).connect(f.frequency);
+        o1.connect(f); o2.connect(f); f.connect(g).connect(ac.destination);
+        o1.start(); o2.start(); lfo.start();
+        return {ac, g};
+      })();
+      audio.ac.resume();
+      audio.g.gain.setTargetAtTime(0.055, audio.ac.currentTime, 1.2);
+      this.setAttribute('aria-pressed','true');
+      this.setAttribute('aria-label','Фоновый звук: включён');
+      $('#soundLabel').textContent = 'Звук вкл';
+    } catch(err){ toast('Звук недоступен'); }
+  } else {
+    if(audio) audio.g.gain.setTargetAtTime(0, audio.ac.currentTime, 0.4);
+    this.setAttribute('aria-pressed','false');
+    this.setAttribute('aria-label','Фоновый звук: выключен');
+    $('#soundLabel').textContent = 'Звук выкл';
+  }
+});
+
+/* ---------- 16. QA dev-панель (?devpanel=1) ---------- */
+const devOn = new URLSearchParams(location.search).get('devpanel') === '1';
+if(devOn) $('#dev').classList.add('on');
+function devLog(){
+  const u = myUser(), attr = readAttr();
+  $('#devOut').innerHTML =
+    `me: ${u?esc(u.code):'—'} · refs: ${refCount(u)} · ${tierName(refCount(u))}<br>` +
+    `attr: ${attr?esc(attr.code):'—'}<br>` +
+    `users: ${Object.keys(DB.users).length} · buyers: ${Object.keys(DB.buyers).length}<br>` +
+    `tg: ${TG.on ? esc(WA.platform)+' v'+esc(WA.version)+(TG.user?' · id'+esc(String(TG.user.id)):'') : 'вне telegram'}<br>` +
+    `crew: ${crewRemote ? 'бэкенд ('+crewRemote.length+')' : (CFG.crewDemo?'демо':'выкл')} · cloud: ${TG.cloud()?'да':'нет'}`;
+}
+$('#dev').addEventListener('click', e => {
+  const b = e.target.closest('[data-dev]'); if(!b) return;
+  const act = b.dataset.dev;
+  if(act==='+1' || act==='+5'){
+    let code = me();
+    if(!code){ code = newCode(); ensureUser(code,{}); setMe(code); }
+    const u = ensureUser(code,{});
+    const n = act==='+1'?1:5;
+    for(let i=0;i<n;i++) u.referrals.push('qa'+Date.now()+i+'@rizzoma.test');
+    saveDB(); renderAll({burst:true}); toast('QA: +'+n+' узл.');
+  }
+  if(act==='link'){
+    const c = newCode(); ensureUser(c,{}); saveDB();
+    copy(refLink(c), 'QA: тест-ссылка ' + c);
+    renderAll();
+  }
+  if(act==='forget'){ ls.del(K_ATTR); renderAll(); toast('QA: атрибуция сброшена'); }
+  if(act==='login'){
+    const v = ($('#devCode').value||'').trim().toUpperCase();
+    if(v.length<4) return toast('QA: введи код');
+    ensureUser(v,{}); saveDB(); setMe(v); lastTier=-99; renderAll(); toast('QA: узел '+v);
+  }
+  if(act==='reset'){
+    ls.del(K_DB); ls.del(K_ME); ls.del(K_ATTR);
+    DB = {users:{},buyers:{}}; lastTier=-99;
+    location.href = location.pathname + (devOn?'?devpanel=1':'');
+  }
+});
+
+/* ---------- 17. старт ---------- */
+renderLadder();
+lastTier = tierIndex(refCount(myUser()));
+renderAll();
+observeReveals();
+
+/* Telegram: прогресс из CloudStorage (новое устройство — тот же узел)
+   и список «Свои» из бэкенда бота, если он прописан в config.js. */
+cloudPull(() => {
+  DB = loadDB();
+  lastTier = tierIndex(refCount(myUser()));
+  renderAll();
+  toast('Узел восстановлен из Telegram');
+});
+if(TG.on && CFG.apiBase){
+  // startapp до бота не долетает — атрибуцию сообщает само мини-приложение
+  const a = readAttr();
+  fetch(CFG.apiBase.replace(/\/+$/,'') + '/api/visit', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({initData: WA.initData, ref: a ? a.code : ''})
+  }).catch(()=>{}).then(() => crewFetch())
+    .then(list => { if(list){ crewRemote = list; renderCrew(); } })
+    .catch(()=>{});
+}
+// на ресайзе пересчитываем только геометрию шкалы — DOM не перестраиваем,
+// иначе сбрасываются reveal-состояния и ввод в форме
+let rzT;
+addEventListener('resize', () => {
+  clearTimeout(rzT);
+  rzT = setTimeout(() => setLadderFill(tierIndex(refCount(myUser())), TIERS.length), 160);
+}, {passive:true});
+})();
+</script>
+</body>
+</html>
