@@ -1,0 +1,51 @@
+name: tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Зависимости
+        run: npm ci
+
+      # Экономика: цена, лестница скиллов, состав беты. Без браузера.
+      - name: Юнит-тесты
+        run: npm test
+
+      - name: Браузер для e2e
+        run: npx playwright install --with-deps chromium
+
+      # Туман, полосатая кромка, чекаут, доступ к бета-админке.
+      - name: E2E
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: test-results/
+          retention-days: 7
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Токены живут только в переменных окружения хостинга.
+      # Здесь — грубая страховка от «случайно закоммитил .env».
+      - name: В репозитории нет токенов
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then
+            echo '.env не должен попадать в репозиторий'; exit 1; fi
+          if git grep -nE '[0-9]{8,10}:[A-Za-z0-9_-]{35}' -- . ':!*.yml'; then
+            echo 'похоже на токен бота в коде'; exit 1; fi

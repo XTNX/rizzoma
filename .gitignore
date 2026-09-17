@@ -10,10 +10,14 @@
 # зависимости и мусор сборки
 node_modules/
 npm-debug.log*
-package-lock.json
 dist/
 .DS_Store
 Thumbs.db
+
+# отчёты автотестов
+test-results/
+playwright-report/
+.playwright/
 
 # рабочие материалы: в приложении не участвуют, публиковать незачем
 references/

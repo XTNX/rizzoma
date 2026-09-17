@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>RIZZOMA — дерево узлов</title>
-<meta name="description" content="RIZZOMA — реферальная сеть и допуск на события. Дерево прокачки: каждый узел ветви открывает следующий уровень допуска.">
+<meta name="description" content="RIZZOMA — билеты и реферальная сеть. Позвал друга, он оплатил — тебе узел. Узлы открывают скидки, бесплатный вход и VIP.">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <meta property="og:title" content="RIZZOMA // дерево узлов">
-<meta property="og:description" content="Реферальная сеть и допуск на события. 18+">
+<meta property="og:description" content="Билеты и реферальная сеть. 18+">
 <meta property="og:image" content="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,8 +16,10 @@
 <!-- Telegram Mini App SDK. Вне Telegram скрипт безвреден: WebApp.platform === 'unknown',
      приложение работает в браузере как обычная страница-приложение. -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<!-- Конфигурация деплоя (бот, short name приложения, бэкенд). Правится без пересборки. -->
+<!-- Конфигурация деплоя (бот, short name приложения, бэкенд, цены). Правится без пересборки. -->
 <script src="config.js"></script>
+<!-- Экономика: пороги узлов, тарифы, расчёт цены. Тот же файл считает цену в юнит-тестах. -->
+<script src="economy.js"></script>
 <style>
 /* ============================================================
    RIZZOMA — Mini App «дерево узлов»
@@ -244,6 +246,13 @@ html.reduce .boot__hint{opacity:.7;animation:none}
   border:1px solid var(--line-strong);padding:4px 8px;color:var(--ink-muted)}
 .chip--ready{color:var(--accent-primary);border-color:rgba(123,47,247,.55)}
 .chip--done{color:var(--accent-toxic);border-color:rgba(182,255,60,.5)}
+.chip--fog{color:var(--accent-secondary);border-color:rgba(255,46,77,.45)}
+/* «вне беты»: другой блок, чем у заблокированного узла — чтобы не путали
+   границу теста с нехваткой приглашённых */
+.fognote{margin-top:var(--s3);border:1px dashed rgba(255,46,77,.45);padding:var(--s2);background:rgba(255,46,77,.04)}
+.fognote b{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--accent-secondary);font-weight:500}
+.fognote ul{margin:10px 0 0;padding-left:18px;color:var(--ink-muted);font-size:13px;line-height:1.65}
 .nsheet__reward{margin:var(--s3) 0 0;padding:var(--s2);border:1px solid var(--line);background:var(--bg-sunken)}
 .nsheet__reward .k{color:var(--ink-muted);font-family:var(--f-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase}
 .nsheet__reward .v{margin-top:6px;font-size:15px}
@@ -266,9 +275,26 @@ html.reduce .boot__hint{opacity:.7;animation:none}
 .hold-note{margin:10px 0 0;color:var(--ink-muted);font-size:12px;text-align:center}
 
 /* ---------- чекаут ---------- */
+/* состав × класс: два сегмент-контрола вместо списка тарифов */
+.seglab{margin:var(--s3) 0 6px}
+.seg{display:grid;gap:1px;background:var(--line);border:1px solid var(--line)}
+.seg--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.seg--2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.seg button{background:var(--bg-sunken);padding:12px 8px;text-align:center;
+  transition:background var(--t-fast) var(--ease)}
+.seg button[aria-pressed="true"]{background:#17121f;box-shadow:inset 0 2px 0 var(--accent-primary)}
+.seg b{display:block;font-family:var(--f-display);font-weight:700;text-transform:uppercase;
+  font-size:14px;letter-spacing:-0.01em}
+.seg span{display:block;margin-top:3px;font-family:var(--f-mono);font-size:9px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-muted)}
+.seg button[aria-pressed="true"] span{color:var(--accent-primary)}
+.colist{margin:var(--s2) 0 0;padding-left:18px;color:var(--ink-muted);font-size:13px;line-height:1.7}
+.livebanner{border:1px solid rgba(182,255,60,.4);color:var(--accent-toxic);padding:11px 12px;
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+  line-height:1.6;margin-top:var(--s2)}
 .order{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);
   border-top:1px solid var(--line);padding-top:var(--s2);margin-top:var(--s2)}
-.order .sum{font-family:var(--f-mono);font-weight:500;font-size:26px}
+.order .sum{font-family:var(--f-mono);font-weight:500;font-size:clamp(18px,5.6vw,26px);white-space:nowrap}
 .tk{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);margin-top:var(--s2)}
 .tk button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s2);align-items:center;
   background:var(--bg-sunken);padding:14px var(--s2);text-align:left;
@@ -280,6 +306,13 @@ html.reduce .boot__hint{opacity:.7;animation:none}
 .tk .p s{display:block;color:var(--ink-muted);font-size:11px;font-weight:400}
 .testbanner{border:1px solid var(--accent-secondary);color:var(--accent-secondary);padding:11px 12px;
   font-family:var(--f-mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;line-height:1.6;margin-top:var(--s2)}
+/* вопрос — тире — короткий ответ: форма памяток из канала */
+.faq{list-style:none;margin:var(--s2) 0 0;padding:0;display:grid;gap:1px;background:var(--line);
+  border:1px solid var(--line)}
+.faq li{background:var(--bg-sunken);padding:11px var(--s2)}
+.faq b{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-muted);font-weight:400}
+.faq span{display:block;margin-top:5px;font-size:13.5px;line-height:1.55}
 .attrline{color:var(--ink-muted);font-size:11px;font-family:var(--f-mono);letter-spacing:.05em;margin:10px 0 0}
 .attrline b{color:var(--accent-primary)}
 .disc{color:var(--accent-toxic);font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;
@@ -386,6 +419,29 @@ html.reduce .boot__hint{opacity:.7;animation:none}
 .adm__skill button{border:1px solid var(--line-strong);padding:7px 2px;
   font-family:var(--f-mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted)}
 .adm__skill button:hover{border-color:var(--accent-toxic);color:var(--accent-toxic)}
+/* туман: переключатели «в бете / закрыто» */
+.adm__fog{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:5px}
+.fogsw{border:1px solid var(--line-strong);padding:8px 6px;text-align:left;background:var(--bg-sunken)}
+.fogsw b{display:block;font-family:var(--f-display);font-size:11.5px;text-transform:uppercase;
+  letter-spacing:-0.01em;color:var(--ink-muted)}
+.fogsw span{display:block;margin-top:3px;font-family:var(--f-mono);font-size:8.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--accent-secondary)}
+.fogsw[aria-pressed="true"]{border-color:rgba(182,255,60,.45)}
+.fogsw[aria-pressed="true"] b{color:var(--ink)}
+.fogsw[aria-pressed="true"] span{color:var(--accent-toxic)}
+/* воронка тестеров */
+.adm__t{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;
+  border:1px solid var(--line);padding:8px 9px;margin-top:5px}
+.adm__t--head{grid-template-columns:minmax(0,1fr) auto;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-muted);border-style:dashed}
+.adm__t b{display:block;font-family:var(--f-display);font-size:13px;letter-spacing:-0.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adm__t span{display:block;font-family:var(--f-mono);font-size:9.5px;color:var(--ink-muted)}
+.adm__t .mono{font-size:9.5px;color:var(--ink-muted);white-space:nowrap}
+.adm__t button{border:1px solid var(--line-strong);padding:6px 8px;font-family:var(--f-mono);
+  font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted)}
+.adm__t button:hover{border-color:var(--accent-secondary);color:var(--accent-secondary)}
+.adm__t.off{opacity:.5}
 .adm__log{font-family:var(--f-mono);font-size:10px;color:var(--ink-muted);line-height:1.7;
   max-height:170px;overflow:auto;border:1px solid var(--line);padding:9px}
 .adm__log b{color:var(--accent-toxic);font-weight:400}
@@ -425,7 +481,7 @@ html.tg.no-back .sheet__close{display:grid}
   <header class="bar">
     <button class="bar__id" id="idBtn" aria-label="Твой узел">
       <span class="bar__sigil" id="barSigil"></span>
-      <span class="bar__code"><b id="barCode">—</b><span id="barState">узел не активирован</span></span>
+      <span class="bar__code"><b id="barCode">—</b><span id="barState">узла нет</span></span>
     </button>
     <div class="bar__stat">
       <div><b id="barTier">TIER_00</b><span>уровень</span></div>
@@ -449,13 +505,13 @@ html.tg.no-back .sheet__close{display:grid}
 
     <!-- до развёртки сети экран занимает только знак: он же и кнопка -->
     <button class="boot" id="bootBtn" aria-label="Развернуть сеть">
-      <span class="boot__hint mono">Коснись знака</span>
+      <span class="boot__hint mono">Нажми на знак</span>
     </button>
 
     <!-- вкладка «Свои» лежит поверх сцены: сцена ставится на паузу -->
     <section class="panel" id="crewPanel" hidden aria-label="Свои">
       <h2>Свои</h2>
-      <p class="panel__lead">Кто из знакомых уже в сети. Список строит бот по своим записям о ссылках: твоя ветвь, тот кто позвал тебя, и соседи по ветви. Адресную книгу Telegram не отдаёт ни приложению, ни боту.</p>
+      <p class="panel__lead">Кто пришёл по твоей ссылке, кто позвал тебя, кто рядом в ветви. Список ведёт бот: контакты Telegram не отдаёт ни приложению, ни боту — только переходы по ссылкам.</p>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
                   border:1px solid var(--line);padding:10px 12px">
         <span class="src" id="crewSrc">Источник: <b>—</b></span>
@@ -487,23 +543,7 @@ html.tg.no-back .sheet__close{display:grid}
 <!-- ============================ ИНФО ============================ -->
 <div class="host" id="infoHost" hidden role="dialog" aria-modal="true" aria-labelledby="infoTitle">
   <div class="host__scrim" data-close></div>
-  <div class="sheet">
-    <div class="sheet__grab" aria-hidden="true"></div>
-    <button class="sheet__close" data-close aria-label="Закрыть">✕</button>
-    <h3 id="infoTitle">RIZZOMA</h3>
-    <p class="muted" style="margin:12px 0 0;font-size:14px">
-      Реферальная сеть и допуск на события. Каждый, кто прошёл по твоей ссылке и получил допуск,
-      становится узлом твоей ветви и открывает следующий узел дерева.
-    </p>
-    <div class="testbanner">Оплата здесь — имитация: карты не обрабатываются, деньги не списываются,
-      билет не выдаётся. Цены тарифов организаторами не объявлены.</div>
-    <p class="muted" style="margin:14px 0 0;font-size:13px">
-      Прогресс хранится в <code style="font-family:var(--f-mono);color:var(--accent-toxic)">localStorage</code>
-      этого браузера и, внутри Telegram, в CloudStorage аккаунта. Это демо-уровень, а не защищённая от фрода схема.
-    </p>
-    <p class="mono muted" style="margin:14px 0 0">Санкт-Петербург · 18+ · © 2026 RIZZOMA</p>
-    <button class="btn btn--ghost btn--wide" data-close style="margin-top:var(--s3)">Закрыть</button>
-  </div>
+  <div class="sheet" id="infoSheet"></div>
 </div>
 
 <!-- ============================ АДМИНКА / QA ============================ -->
@@ -530,8 +570,11 @@ html.tg.no-back .sheet__close{display:grid}
    кнопок всё то же самое работает мышью/пальцем.
    Всё через isVersionAtLeast — на старых клиентах молча деградирует.
    ============================================================ */
-const CFG = Object.assign({bot:'', app:'', apiBase:'', crewDemo:true, qaButton:false},
+const CFG = Object.assign({bot:'', app:'', apiBase:'', crewDemo:true, qaButton:false,
+                           prices:{std:null, vip:null}, event:{}, betaOpen:null, admins:[],
+                           panel:true},
                           window.RIZZOMA_CONFIG || {});
+const API = CFG.apiBase ? CFG.apiBase.replace(/\/+$/,'') : '';
 const WA  = (window.Telegram && window.Telegram.WebApp) || null;
 const inTG = !!(WA && WA.initData !== undefined && WA.platform && WA.platform !== 'unknown');
 
@@ -747,52 +790,43 @@ function captureRef(){
 captureRef();
 
 /* ============================================================
-   4. ЭКОНОМИКА
-   Числа порогов и сами награды (label) — прежние, правятся здесь.
-   Добавлены только игровые имена скиллов и разбивка на три ветви:
-   это подача, а не экономика.
+   4. ЭКОНОМИКА И БЕТА
+   Числа, тарифы и расчёт цены живут в economy.js — тот же файл
+   считает цену в юнит-тестах. Здесь только состояние беты:
+   какие узлы открыты, а какие закрыты туманом.
    ============================================================ */
-const TIERS = [
-  {n:1,   skill:'ПРОБИТИЕ',     line:'−20% к цене допуска',            label:'Скидка 20% на билет'},
-  {n:3,   skill:'ПРОХОД',       line:'Допуск обнуляется в цене',       label:'Бесплатная проходка'},
-  {n:5,   skill:'КАПСУЛА',      line:'Допуск + мерч движения',         label:'Проходка + мерч (капсула движения)'},
-  {n:10,  skill:'ОБХОД',        line:'Очередь перестаёт существовать', label:'Проходка + мерч + скип очереди / гест-лист'},
-  {n:15,  skill:'ГЛУБИНА',      line:'VIP-зона открыта',               label:'VIP-проходка: доступ в VIP-зону'},
-  {n:25,  skill:'РЕЛИКТ',       line:'VIP + лимитированная капсула',   label:'VIP + лимитированная мерч-капсула'},
-  {n:40,  skill:'КОНТУР',       line:'Год всех ивентов + артисты',     label:'Годовой абонемент на все ивенты + встреча с артистами'},
-  {n:60,  skill:'РЕЗИДЕНТ',     line:'−50% навсегда + закрытые ивенты',label:'Статус «Резидент»: пожизненная скидка 50% + закрытые ивенты'},
-  {n:80,  skill:'ВЕЧНАЯ ВЕТВЬ', line:'Один формат — навсегда',         label:'Пожизненная проходка на один формат ивентов'},
-  {n:100, skill:'ТОТЕМ',        line:'Всё, навсегда, и тотем в сети',  label:'Пожизненная максимальная проходка + именной тотем в сети'}
-];
-/* Три ветви по смыслу награды. Порядок внутри ветви — по возрастанию порога;
-   пороги и награды берутся из TIERS без изменений, это только группировка.
-     ВОЛЯ  — проходки и скидки на билеты        (1, 3, 10 узлов)
-     ТЕЛО  — мерч, аксессуары, вещи, знак       (5, 25, 100 узлов)
-     РАЗУМ — VIP и пожизненные бонусы           (15, 40, 60, 80 узлов) */
-const BRANCHES = [
-  {rom:'I',   name:'ВОЛЯ',  hint:'проходки и скидки',    idx:[0,1,3]},
-  {rom:'II',  name:'ТЕЛО',  hint:'мерч, вещи, знак',     idx:[2,5,9]},
-  {rom:'III', name:'РАЗУМ', hint:'VIP и пожизненное',    idx:[4,6,7,8]}
-];
-const branchOf = i => BRANCHES.findIndex(b => b.idx.indexOf(i) >= 0);
-const tierIndex = c => { let i=-1; TIERS.forEach((t,k)=>{ if(c>=t.n) i=k; }); return i; };
-const tierName  = c => 'TIER_' + String(tierIndex(c)+1).padStart(2,'0');
+const ECON = window.RIZZOMA_ECONOMY;
+const {TIERS, BRANCHES, TICKET_CLASS, TICKET_SIZE, VIP_TIER,
+       classBase, sizeOf, tierIndex, tierName, branchOf,
+       money, priceLabel, effPrice, comboPrice, priceNotes} = ECON;
 
-const TICKETS = [
-  {id:'early',   name:'Early',    price:null, note:'первая волна',   hot:false, perks:['Вход с 22:00','Ограниченное количество']},
-  {id:'regular', name:'Regular',  price:null, note:'основная волна', hot:true,  perks:['Вход с 22:00','Основной пул мест']},
-  {id:'door',    name:'На входе', price:null, note:'у ворот',        hot:false, perks:['Оплата на месте','Наличие не гарантируется']}
-];
-const EVENT_LINE = 'VIDEO LOUNGE · 12.09.2026, 22:00 · Грузинская ул., 3к1Б · 18+';
-const money = n => new Intl.NumberFormat('ru-RU').format(n) + ' ₽';
-const priceLabel = p => p === null ? 'уточняется' : (p === 0 ? '0 ₽' : money(p));
-/* Итоговая цена: 3+ узла — бесплатно, 1–2 — минус 20%. base===null → цена не объявлена. */
-function effPrice(base, c){
-  if(c >= 3) return 0;
-  if(base === null) return null;
-  if(c >= 1) return Math.round(base*0.8);
-  return base;
+const EVENT_LINE = (CFG.event && CFG.event.line) ||
+  'Следующий ивент · дата не объявлена · Санкт-Петербург · 18+';
+
+/* ---------- туман войны ----------
+   Бета открывает только узлы про билеты (ветвь ВОЛЯ) и одну
+   VIP-привилегию (ГЛУБИНА). Остальные узлы остаются на сцене, но
+   закрыты туманом: это «вне беты», а не «не хватает рефералов» —
+   в UI это два разных состояния и два разных текста.
+   Набор правится админкой на лету и переживает перезагрузку. */
+const K_BETA = 'rizzoma_beta';
+let betaOpen = (() => {
+  const raw = ls0(K_BETA);
+  if(raw){ try { const a = JSON.parse(raw); if(Array.isArray(a)) return new Set(a.map(Number)); } catch(e){} }
+  const base = Array.isArray(CFG.betaOpen) ? CFG.betaOpen : ECON.BETA_OPEN;
+  return new Set(base.map(Number));
+})();
+function ls0(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+const inBeta  = i => betaOpen.has(i);
+const fogged  = i => !inBeta(i);
+function setBetaOpen(list){
+  betaOpen = new Set(list.map(Number));
+  try { localStorage.setItem(K_BETA, JSON.stringify([...betaOpen].sort((a,b)=>a-b))); } catch(e){}
 }
+const betaOpenList = () => [...betaOpen].sort((a,b)=>a-b);
+/* цены приходят из config.js: null → «уточняется», оплата заблокирована */
+const priceOpts = () => ({prices: CFG.prices || {}, vipSkill: hasClaim(VIP_TIER)});
+const classPrice = id => classBase(id, CFG.prices || {});
 
 /* ---------- 5. утилиты ---------- */
 const $  = (s,r=document) => r.querySelector(s);
@@ -978,8 +1012,11 @@ const SKILL_EXT = (() => {
   return {h, v};
 })();
 
-/* состояние узла: 0 — заблокирован, 1 — доступен, 2 — получен */
+/* состояние узла: -1 — вне беты (туман), 0 — заблокирован, 1 — доступен, 2 — получен.
+   «Вне беты» проверяется первым: узел под туманом не активируется даже с
+   переключателем «все скиллы разлочены» — иначе QA-режим ломал бы границу теста. */
 function nodeState(i){
+  if(fogged(i)) return hasClaim(i) ? 2 : -1;
   if(hasClaim(i)) return 2;
   if(ADMIN.allUnlocked) return 1;
   return refCount(myUser()) >= TIERS[i].n ? 1 : 0;
@@ -1151,24 +1188,50 @@ function projArm(px, py, b){
 const coreXY = () => [W/2 + CAM.x, H/2 + CAM.y];
 function nodeRadius(){ return clamp(18*CAM.z, 12, 30); }
 
-/* Знак-ядро обязан оставаться на экране: увод камеры ограничен так, чтобы он
-   не ушёл за кромку. За пределом — резиновый overscroll, отпустил — вернуло. */
-function camLimit(){ return {x: Math.max(0, W/2 - 54), y: Math.max(0, H/2 - 54)}; }
-function rubber(v, lim){
-  const a = Math.abs(v);
-  if(a <= lim) return v;
-  const over = a - lim;
-  return Math.sign(v) * (lim + over/(1 + over/70));    // дальше тянется всё туже
+/* Предел панорамы — не одна рамка вокруг ядра, а четыре независимые стороны.
+   Открытую часть дерева нужно рассматривать свободно: поле едет настолько,
+   чтобы любой доступный узел доезжал до центра с запасом. Закрытые ветви
+   границу не расширяют — поэтому стена (и полосатая кромка) появляется только
+   в той стороне, где начинается туман. Базовый минимум везде один: знак-ядро
+   не уходит с экрана. */
+const CORE_KEEP = 54, PAN_PAD = 34;
+function camBounds(){
+  const kx = Math.max(0, W/2 - CORE_KEEP), ky = Math.max(0, H/2 - CORE_KEEP);
+  const B = {x1:-kx, x2:kx, y1:-ky, y2:ky};
+  const s = base*CAM.z;
+  SKILLS.forEach(n => {
+    if(nodeState(n.i) === -1) return;                  // туман поле не расширяет
+    const a = armAngle(n.b), ca = Math.cos(a), sa = Math.sin(a);
+    const dx = (n.wx*ca - n.wy*sa)*s, dy = (n.wx*sa + n.wy*ca)*s;
+    B.x1 = Math.min(B.x1, -dx - PAN_PAD); B.x2 = Math.max(B.x2, -dx + PAN_PAD);
+    B.y1 = Math.min(B.y1, -dy - PAN_PAD); B.y2 = Math.max(B.y2, -dy + PAN_PAD);
+  });
+  return B;
+}
+/* есть ли закрытый узел в той стороне, которую открывает этот оттяг */
+function fogAhead(axis, dir){
+  const s = base*CAM.z;
+  return SKILLS.some(n => {
+    if(nodeState(n.i) !== -1) return false;
+    const a = armAngle(n.b), ca = Math.cos(a), sa = Math.sin(a);
+    const d = axis === 'x' ? (n.wx*ca - n.wy*sa)*s : (n.wx*sa + n.wy*ca)*s;
+    return dir > 0 ? d < -CORE_KEEP : d > CORE_KEEP;
+  });
+}
+function rubber(v, lo, hi){
+  if(v > hi){ const o = v - hi; return hi + o/(1 + o/70); }   // дальше тянется всё туже
+  if(v < lo){ const o = lo - v; return lo - o/(1 + o/70); }
+  return v;
 }
 function camSnap(){
-  const L = camLimit();
-  CAM.tx = clamp(CAM.tx, -L.x, L.x); CAM.ty = clamp(CAM.ty, -L.y, L.y);
+  const B = camBounds();
+  CAM.tx = clamp(CAM.tx, B.x1, B.x2); CAM.ty = clamp(CAM.ty, B.y1, B.y2);
   CAM.x = CAM.tx; CAM.y = CAM.ty; CAM.z = CAM.tz;
 }
 /* экспоненциальное сближение с целью — не зависит от частоты кадров */
 function camStep(dt){
-  const L = camLimit();
-  CAM.tx = clamp(CAM.tx, -L.x, L.x); CAM.ty = clamp(CAM.ty, -L.y, L.y);
+  const B = camBounds();
+  CAM.tx = clamp(CAM.tx, B.x1, B.x2); CAM.ty = clamp(CAM.ty, B.y1, B.y2);
   const e = 1 - Math.pow(0.0022, dt/1000);
   CAM.z += (CAM.tz - CAM.z)*e;
   if(!dragging){                                       // во время драга ведём руками
@@ -1281,9 +1344,14 @@ function strokeArmPoly(pts, b, color, w, glow, part){
   ctx.lineWidth = w; ctx.strokeStyle = color; ctx.stroke();
 }
 
-/* --- узлы прокачки поверх своих же вершин сети --- */
-function drawSkills(t, ph){
+/* --- узлы прокачки поверх своих же вершин сети ---
+   Два прохода: сначала закрытая часть (её накроет туман), потом открытая
+   поверх тумана — иначе мгла соседней ветви съедала бы доступный узел. */
+function drawSkills(t, ph, which){
   if(ph.alpha <= 0.01) return;
+  const wantFog = which === 'fog';
+  const list = SKILLS.filter(n => (nodeState(n.i) === -1) === wantFog);
+  if(!list.length) return;
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.globalAlpha = ph.alpha;
@@ -1291,7 +1359,7 @@ function drawSkills(t, ph){
   const [cx0, cy0] = coreXY();
 
   // 1) звенья сети между узлами: подсвечены по состоянию узла
-  SKILLS.forEach(n => {
+  list.forEach(n => {
     const st = nodeState(n.i);
     const isBurning = burn && burn.i === n.i;
     n.polys.forEach((poly, pi) => {
@@ -1309,7 +1377,7 @@ function drawSkills(t, ph){
   });
 
   // 2) частицы вдоль прожжённой ветви — по точкам той же ломаной
-  for(let i=FX.length-1;i>=0;i--){
+  for(let i = wantFog ? -1 : FX.length-1; i>=0; i--){
     const f = FX[i];
     const p = (t - f.start)/f.dur;
     if(p >= 1){ FX.splice(i,1); continue; }
@@ -1324,7 +1392,7 @@ function drawSkills(t, ph){
   // 3) сами узлы
   const R = nodeRadius();
   const drawn = [];
-  SKILLS.forEach(n => {
+  list.forEach(n => {
     const st = nodeState(n.i);
     const [x, y] = projArm(n.wx, n.wy, n.b);
     n.sx = x; n.sy = y;
@@ -1375,8 +1443,149 @@ function drawSkills(t, ph){
 
   // 4) подписи. Раскладчик проверяет пересечения: что не помещается —
   //    гаснет, что освободилось при зуме — проявляется. Никаких наложений.
-  layoutLabels(drawn, cx0, cy0);
+  //    У закрытой части подписей нет: за неё говорит одна метка тумана.
+  if(!wantFog) layoutLabels(drawn, cx0, cy0);
   ctx.globalAlpha = 1;
+}
+
+/* --- туман войны ------------------------------------------------------
+   Узлы вне беты не вырезаны из сцены: геометрия, звенья и сигилы на
+   месте, но накрыты мглой. Туман собирается из радиальных пятен вокруг
+   закрытых узлов — по лучу они сливаются в плюмаж и уходят за кадр,
+   поэтому закрытая часть читается как неразведанная территория карты,
+   а не как отсутствующая. Дыхание пятен медленное; в статичном режиме
+   выключено совсем.
+   ---------------------------------------------------------------------- */
+const plural = (n, one, few, many) => {
+  const m10 = n % 10, m100 = n % 100;
+  if(m10 === 1 && m100 !== 11) return one;
+  if(m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+};
+/* пятна: по одному на закрытый узел + два выноса за последний узел луча,
+   чтобы туман уходил за кромку сцены, а не заканчивался шариком */
+function fogCells(){
+  const closed = SKILLS.filter(s => nodeState(s.i) === -1);
+  const cells = closed.map(s => ({wx:s.wx, wy:s.wy, b:s.b, k:1}));
+  BRANCHES.forEach((_, b) => {
+    const mine = closed.filter(s => s.b === b);
+    if(!mine.length) return;
+    const out = mine.reduce((a, s) => Math.hypot(s.wx, s.wy) > Math.hypot(a.wx, a.wy) ? s : a);
+    const r = Math.hypot(out.wx, out.wy) || 1;
+    [[1.24, 1.2], [1.52, 1.35], [1.84, 1.5]].forEach(([rr, kk]) =>
+      cells.push({wx: out.wx/r*(r*rr), wy: out.wy/r*(r*rr), b, k: kk}));
+  });
+  return cells;
+}
+function drawFog(t, ph){
+  if(ph.alpha <= 0.01) return;
+  const cells = fogCells();
+  if(!cells.length) return;
+  /* Радиус пятна задаётся в координатах сцены, а не в размере узла: у узла
+     размер упирается в потолок (иначе на зуме кружки раздувались бы), и мгла
+     вместе с ним перестала бы накрывать разъехавшуюся ветвь. */
+  const R = 0.56 * base * CAM.z;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.globalAlpha = ph.alpha;
+  cells.forEach((c, k) => {
+    const [x, y] = projArm(c.wx, c.wy, c.b);
+    const breathe = reduceMotion ? 1 : 1 + Math.sin(t*0.00042 + k*1.7)*0.07;
+    const r = R*c.k*breathe;
+    if(x < -r || x > W + r || y < -r || y > H + r) return;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0,    'rgba(9,9,12,0.94)');
+    g.addColorStop(0.52, 'rgba(12,10,18,0.78)');
+    g.addColorStop(1,    'rgba(9,9,12,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+/* подпись тумана — одна на ветвь, в центре её закрытой части.
+   Текст другой, чем у заблокированного узла: «вне беты» ≠ «не хватает узлов». */
+function drawFogLabels(ph){
+  if(ph.alpha <= 0.3) return;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.globalAlpha = ph.alpha;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  BRANCHES.forEach((br, b) => {
+    const mine = SKILLS.filter(s => s.b === b && nodeState(s.i) === -1);
+    if(!mine.length) return;
+    let sx = 0, sy = 0;
+    mine.forEach(s => { const p = projArm(s.wx, s.wy, s.b); sx += p[0]; sy += p[1]; });
+    sx /= mine.length; sy /= mine.length;
+    if(sx < 40 || sx > W - 40 || sy < 30 || sy > H - 30) return;
+    const f1 = clamp(11*CAM.z, 10, 14), f2 = clamp(9*CAM.z, 8.5, 11);
+    ctx.font = `500 ${f1}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle = 'rgba(242,241,236,0.62)';
+    ctx.fillText('ВНЕ БЕТЫ', sx, sy - f1*0.7);
+    ctx.font = `400 ${f2}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle = 'rgba(139,139,147,0.7)';
+    ctx.fillText(mine.length + ' ' + plural(mine.length, 'узел', 'узла', 'узлов'), sx, sy + f2*0.9);
+  });
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+}
+
+/* --- полосатая кромка на overscroll ----------------------------------
+   Поле кончилось: из-за кромки, от которой тянут, проступает сигнальная
+   штриховка — тем плотнее, чем глубже оттяг, и гаснет вместе с резиновым
+   возвратом. Если за этой кромкой туман, полосы красные и подписаны
+   «вне беты»; если просто край поля — нейтральные.
+   ---------------------------------------------------------------------- */
+let STRIPE = null;
+function stripePattern(){
+  if(STRIPE) return STRIPE;
+  const S = 14, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(255,46,77,0.16)';
+  g.fillRect(0,0,S,S);
+  g.strokeStyle = 'rgba(255,46,77,0.85)';
+  g.lineWidth = 5; g.lineCap = 'square';
+  // диагональ 45°, продублированная по обе стороны тайла — шов не виден
+  [-S, 0, S].forEach(o => { g.beginPath(); g.moveTo(o - 2, S + 2); g.lineTo(o + S + 2, -2); g.stroke(); });
+  STRIPE = ctx.createPattern(c, 'repeat');
+  return STRIPE;
+}
+const OVER_MAX = 132;                       // глубже кромку не рисуем
+function drawOverscroll(){
+  const B = camBounds();
+  const ox = CAM.x - clamp(CAM.x, B.x1, B.x2);
+  const oy = CAM.y - clamp(CAM.y, B.y1, B.y2);
+  if(Math.abs(ox) < 0.6 && Math.abs(oy) < 0.6) return;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  /* Полосы — это метка «здесь закрыто», поэтому они появляются только в
+     стороне тумана. Обычный конец поля отмечается одной тихой нитью: туда
+     просто дальше нечего смотреть, а не запрещено. */
+  const band = (x, y, w, h, depth, fog, edgeAt) => {
+    const a = clamp(depth/86, 0, 1);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    if(fog){
+      ctx.globalAlpha = a*0.9;
+      ctx.fillStyle = stripePattern();
+      ctx.fillRect(x, y, w, h);
+    }
+    ctx.globalAlpha = fog ? a : a*0.5;
+    ctx.fillStyle = fog ? 'rgba(255,46,77,0.9)' : 'rgba(242,241,236,0.34)';
+    if(w < h) ctx.fillRect(edgeAt === 'l' ? x : x + w - 1.5, y, 1.5, h);
+    else      ctx.fillRect(x, edgeAt === 't' ? y : y + h - 1.5, w, 1.5);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  };
+
+  if(Math.abs(ox) > 0.6){
+    const d = Math.min(Math.abs(ox), OVER_MAX);
+    const left = ox > 0;                      // тянут вправо → упёрлись в левую кромку
+    band(left ? 0 : W - d, 0, d, H, Math.abs(ox), fogAhead('x', ox), left ? 'l' : 'r');
+  }
+  if(Math.abs(oy) > 0.6){
+    const d = Math.min(Math.abs(oy), OVER_MAX);
+    const top = oy > 0;
+    band(0, top ? 0 : H - d, W, d, Math.abs(oy), fogAhead('y', oy), top ? 't' : 'b');
+  }
 }
 
 /* --- раскладка подписей без наложений ---------------------------------
@@ -1470,15 +1679,21 @@ function layoutLabels(drawn, cx0, cy0){
     const p = projArm(Math.cos(aa)*(rr + 0.42), Math.sin(aa)*(rr + 0.42), b);
     // заголовок ветви не должен уезжать за кадр вместе с концом луча
     p[0] = clamp(p[0], 46, W - 46); p[1] = clamp(p[1], 34, H - 34);
-    const done = br.idx.filter(i => hasClaim(i)).length;
+    // счётчик ветви считает только то, что участвует в бете: «0/3» у
+    // полностью закрытой ветви читалось бы как невыполненная задача
+    const openIdx = br.idx.filter(inBeta);
+    const done = openIdx.filter(i => hasClaim(i)).length;
     const s1 = clamp(15*CAM.z, 13, 19), s2 = clamp(10*CAM.z, 9, 12);
-    const lines = [`${done}/${br.idx.length}`, `${br.rom} · ${br.name}`];
-    const col = done ? ['rgba(182,255,60,0.95)', 'rgba(182,255,60,0.75)']
-                     : ['rgba(139,139,147,0.6)', 'rgba(139,139,147,0.62)'];
-    const pos = place(p[0], p[1], 2, lines, [s1, s2]);
+    const lines = openIdx.length ? [`${done}/${openIdx.length}`, `${br.rom} · ${br.name}`]
+                                 : [`${br.rom} · ${br.name}`];
+    const sizes = openIdx.length ? [s1, s2] : [s2];
+    const col = !openIdx.length ? ['rgba(139,139,147,0.45)']
+              : done            ? ['rgba(182,255,60,0.95)', 'rgba(182,255,60,0.75)']
+                                : ['rgba(139,139,147,0.6)', 'rgba(139,139,147,0.62)'];
+    const pos = place(p[0], p[1], 2, lines, sizes);
     const cur = fade(BR_LA.get(b) || 0, pos ? 1 : 0);
     BR_LA.set(b, cur);
-    paint(pos, lines, [s1, s2], col, cur);
+    paint(pos, lines, sizes, col, cur);
   });
 
   // закрытые узлы — последними: они уступают место всем остальным
@@ -1499,7 +1714,11 @@ function draw(t){
   }
   if(BOOT.phase !== 'idle') drawMandala(t, ph);
   drawCore(t, ph);
-  drawSkills(t, ph);
+  drawSkills(t, ph, 'fog');             // закрытая часть — под мглой
+  drawFog(t, ph);
+  drawSkills(t, ph, 'open');            // открытая часть — поверх мглы
+  drawFogLabels(ph);
+  if(BOOT.phase === 'ready') drawOverscroll();
   ctx.setTransform(1,0,0,1,0,0);
 }
 
@@ -1533,6 +1752,7 @@ const HOLD_MS = 1000;
 const pointers = new Map();
 let dragging = false, moved = 0, pinch0 = 0, pinchZ = 1;
 let rawX = 0, rawY = 0;                      // положение драга без ограничения
+const edgeHit = {x:0, y:0};                  // упор в кромку отзывается один раз на сторону
 
 function hitNode(x, y){
   const R = nodeRadius()*1.6 + 8;
@@ -1547,9 +1767,9 @@ function hitNode(x, y){
 function centerOn(n, z){
   CAM.tz = clamp(z || Math.max(CAM.tz, 1.15), CAM.min, CAM.max);
   const a = armAngle(n.b), s = base*CAM.tz;
-  const L = camLimit();
-  CAM.tx = clamp(-(n.wx*Math.cos(a) - n.wy*Math.sin(a))*s, -L.x, L.x);
-  CAM.ty = clamp(-(n.wx*Math.sin(a) + n.wy*Math.cos(a))*s, -L.y, L.y);
+  const B = camBounds();
+  CAM.tx = clamp(-(n.wx*Math.cos(a) - n.wy*Math.sin(a))*s, B.x1, B.x2);
+  CAM.ty = clamp(-(n.wx*Math.sin(a) + n.wy*Math.cos(a))*s, B.y1, B.y2);
   kick();                                     // сам перелёт доезжает в loop()
 }
 function recenter(){ CAM.tx = 0; CAM.ty = 0; CAM.tz = 1; kick(); }
@@ -1630,9 +1850,12 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
   rawX = CAM.x; rawY = CAM.y;
+  edgeHit.x = edgeHit.y = 0;
   const r = cv.getBoundingClientRect();
   const n = hitNode(e.clientX - r.left, e.clientY - r.top);
-  if(n && nodeState(n.i) === 1) startHold(n.i, 'canvas');
+  const st = n ? nodeState(n.i) : null;
+  if(st === 1) startHold(n.i, 'canvas');
+  else if(st === -1) TG.haptic('impact','rigid');     // туман на удержание не отвечает
   else if(n) TG.haptic('select');
   dragging = true;
 });
@@ -1651,11 +1874,17 @@ cv.addEventListener('pointermove', e => {
   }
   if(moved > 12) cancelHold();               // уводишь палец — активация отменяется
   if(dragging){
-    // за границей ядро упирается: смещение гасится, отпустишь — вернёт
-    const L = camLimit();
+    // за пределом поле упирается: смещение гасится, отпустишь — вернёт.
+    // Отклик жёстче и с полосатой кромкой только там, где дальше туман.
+    const B = camBounds();
     rawX += dx; rawY += dy;
-    CAM.x = CAM.tx = rubber(rawX, L.x);
-    CAM.y = CAM.ty = rubber(rawY, L.y);
+    CAM.x = CAM.tx = rubber(rawX, B.x1, B.x2);
+    CAM.y = CAM.ty = rubber(rawY, B.y1, B.y2);
+    const hx = rawX > B.x2 ? 1 : (rawX < B.x1 ? -1 : 0);
+    const hy = rawY > B.y2 ? 1 : (rawY < B.y1 ? -1 : 0);
+    if((hx && hx !== edgeHit.x) || (hy && hy !== edgeHit.y))
+      TG.haptic('impact', (hx && fogAhead('x', hx)) || (hy && fogAhead('y', hy)) ? 'rigid' : 'soft');
+    edgeHit.x = hx; edgeHit.y = hy;
     kick();
   }
 });
@@ -1668,9 +1897,9 @@ function endPointer(e){
   cancelHold();
   dragging = pointers.size > 0;
   if(!dragging){                              // возврат из overscroll
-    const L = camLimit();
-    rawX = CAM.tx = clamp(CAM.x, -L.x, L.x);
-    rawY = CAM.ty = clamp(CAM.y, -L.y, L.y);
+    const B = camBounds();
+    rawX = CAM.tx = clamp(CAM.x, B.x1, B.x2);
+    rawY = CAM.ty = clamp(CAM.y, B.y1, B.y2);
     startLoop(); kick();
   }
   if(quick){
@@ -1724,7 +1953,7 @@ function claimSkill(i){
   logEvent('claimed', TIERS[i].skill);
   TG.haptic('notify','success');
   playClaimFX(i, false);
-  toast('Скилл получен: ' + TIERS[i].skill);
+  toast('Забрано: ' + TIERS[i].skill);
   syncEnergy();
   renderBar(); renderHint(); renderFabPrice();
   if(openNodeIdx === i) renderNodeSheet(i);     // окно, если открыто, переходит в «получен»
@@ -1745,24 +1974,35 @@ function nodeSheetHTML(i, preview){
   const b = BRANCHES[branchOf(i)];
   const c = refCount(myUser());
   const pct = clamp((c / t.n) * 100, 0, 100);
-  const chip = st===2 ? '<span class="chip chip--done">получен</span>'
-             : st===1 ? '<span class="chip chip--ready">доступен</span>'
-             : '<span class="chip">заблокирован</span>';
+  const chip = st===2  ? '<span class="chip chip--done">получен</span>'
+             : st===1  ? '<span class="chip chip--ready">доступен</span>'
+             : st===-1 ? '<span class="chip chip--fog">вне беты</span>'
+             : '<span class="chip">нужно больше узлов</span>';
   const sig = `<span class="nsheet__sigil ${st===2?'done':(st===1?'ready':'lock')}">${
     sigilSVG('SKILL_' + t.skill, st===2 ? 'var(--accent-toxic)' : (st===1 ? 'var(--ink)' : 'var(--ink-muted)'))}</span>`;
 
   let action = '';
   if(st === 1){
     action = `<button class="hold" id="holdBtn" aria-label="Удерживай, чтобы активировать скилл">
-        <i aria-hidden="true"></i><span>Удерживай, чтобы активировать</span></button>
-      <p class="hold-note">Отпустишь раньше — активация отменится, состояние не изменится.</p>`;
+        <i aria-hidden="true"></i><span>Держи, чтобы забрать</span></button>
+      <p class="hold-note">Отпустишь раньше — ничего не изменится.</p>`;
   } else if(st === 2){
     action = `<p class="hold-note" style="color:var(--accent-toxic);margin-top:var(--s3)">
-        Ветвь прожжена. Скилл вшит в узел ${esc(me() || '')} навсегда.</p>`;
+        Забрано. Узел ${esc(me() || '')}. Отмены нет.</p>`;
+  } else if(st === -1){
+    // «вне беты» — это не «мало рефералов»: другой текст, другой вывод
+    const open = betaOpenList().map(k => TIERS[k].skill).join(' · ');
+    action = `<div class="fognote">
+        <b>Не участвует в бете.</b>
+        <ul><li>В тесте открыто: ${esc(open)}</li>
+            <li>Всё это — про билеты и вход</li>
+            <li>Мерч и пожизненные бонусы включим после теста</li></ul>
+      </div>`;
   } else {
+    const need = Math.max(0, t.n - c);
     action = `<p class="hold-note" style="margin-top:var(--s3)">
-        Нужно ещё <b style="color:var(--accent-primary)">${Math.max(0, t.n - c)}</b> узл. в ветви.
-        Узел засчитывается, когда приглашённый получает допуск.</p>
+        Ещё <b style="color:var(--accent-primary)">${need}</b> ${plural(need,'узел','узла','узлов')}.
+        Узел засчитывается, когда приглашённый оплатил билет.</p>
       <button class="btn btn--ghost btn--wide" id="nsShare" style="margin-top:12px">Позвать своих →</button>`;
   }
 
@@ -1780,13 +2020,14 @@ function nodeSheetHTML(i, preview){
     <div class="nsheet__reward">
       <div class="k">Что даёт</div>
       <div class="v">${esc(t.line)}</div>
-      <div class="k" style="margin-top:12px">Награда</div>
+      <div class="k" style="margin-top:12px">Полностью</div>
       <div class="v" style="font-size:13px;color:var(--ink-muted)">${esc(t.label)}</div>
     </div>
+    ${st === -1 ? '' : `
     <div class="prog">
-      <div class="prog__row mono"><span>Прогресс ветви</span><span>${Math.min(c, t.n)} / ${t.n} узл.</span></div>
+      <div class="prog__row mono"><span>Приглашено</span><span>${Math.min(c, t.n)} / ${t.n}</span></div>
       <div class="prog__bar"><i style="width:${pct}%"></i></div>
-    </div>
+    </div>`}
     ${action}`;
 }
 function renderNodeSheet(i, preview){
@@ -1823,6 +2064,7 @@ function openHost(sel){
   const h = $(sel);
   if(!h || stack[stack.length-1] === sel) return;
   h.hidden = false;
+  h.dataset.opened = String(Math.round(performance.now()));
   requestAnimationFrame(() => h.classList.add('in'));
   stack.push(sel);
   TG.back(true, popHost);
@@ -1847,7 +2089,15 @@ function popHost(){
   else if(S.tab !== 'tree') setTab('tree');
 }
 document.addEventListener('click', e => {
-  if(e.target.closest('[data-close]')){ popHost(); return; }
+  const c = e.target.closest('[data-close]');
+  if(!c) return;
+  /* Лист открывается по pointerup, а на тач-экранах следом прилетает
+     синтетический click — уже в скрим, который к этому моменту накрыл
+     сцену. Короткая отсечка после открытия: иначе на части WebView тап
+     по узлу открывал бы окно и сам же его закрывал. */
+  const host = c.closest('.host');
+  if(host && performance.now() - (+host.dataset.opened || 0) < 400) return;
+  popHost();
 });
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape'){ cancelHold(); popHost(); }
@@ -1900,23 +2150,28 @@ function renderBar(){
   $('#barSigil').innerHTML = sigilSVG(code || 'RIZZOMA', code ? 'var(--accent-toxic)' : 'var(--ink-muted)');
   $('#barSigil').classList.toggle('lit', !!code);
   $('#barCode').textContent = code || 'НЕТ УЗЛА';
-  $('#barState').textContent = code ? (u.paid ? 'допуск оплачен' : 'узел активен') : 'нажми, чтобы активировать';
+  $('#barState').textContent = code ? (u.paid ? 'билет оплачен' : 'узел активен') : 'нажми, чтобы создать';
   $('#barTier').textContent = tierName(c);
   $('#barCount').textContent = c;
 }
 function renderHint(){
   const u = myUser();
   const el = $('#hint');
-  if(!u){ el.innerHTML = '<span>Узел не активирован · нажми на знак слева вверху</span>'; return; }
+  if(!u){ el.innerHTML = '<span>Узла нет · нажми на знак слева вверху</span>'; return; }
   const c = refCount(u), ready = readyCount();
-  if(ready){ el.innerHTML = `<span><b class="ready">${ready}</b> ${ready===1?'узел готов':'узла готовы'} · удерживай знак</span>`; return; }
-  const nextI = TIERS.findIndex((t,i) => !hasClaim(i) && c < t.n);
-  if(nextI < 0){ el.innerHTML = '<span>Дерево пройдено полностью</span>'; return; }
-  el.innerHTML = `<span>До узла ${esc(TIERS[nextI].skill)} — <b>${TIERS[nextI].n - c}</b> узл. ветви</span>`;
+  if(ready){
+    el.innerHTML = `<span><b class="ready">${ready}</b> ${plural(ready,'узел готов','узла готовы','узлов готовы')} · держи знак</span>`;
+    return;
+  }
+  // цель ищем только среди открытых в бете узлов: вести к туману нельзя
+  const nextI = ECON.nextOpenTier(c, claims(), betaOpenList());
+  if(nextI < 0){ el.innerHTML = '<span>В бете забрано всё</span>'; return; }
+  const need = TIERS[nextI].n - c;
+  el.innerHTML = `<span>Ещё <b>${need}</b> ${plural(need,'узел','узла','узлов')} → ${esc(TIERS[nextI].skill)}</span>`;
 }
 function renderFabPrice(){
   const c = refCount(myUser());
-  const p = effPrice(TICKETS[1].price, c);
+  const p = comboPrice('std', 'solo', c, priceOpts());
   $('#fabPrice').textContent = p === 0 ? '· бесплатно' : (c >= 1 ? '· −20%' : '');
 }
 
@@ -1928,7 +2183,7 @@ function refLink(code){
   u.search = '?ref=' + code; u.hash = '';
   return u.toString();
 }
-const SHARE_TEXT = 'RIZZOMA · VIDEO LOUNGE, 12.09.2026, СПб. Заходи по моему узлу — сеть растёт.';
+const SHARE_TEXT = 'RIZZOMA. Заходи по моей ссылке — билет со скидкой тебе, узел мне.';
 async function copy(text, msg){
   try { await navigator.clipboard.writeText(text); toast(msg); }
   catch(e){
@@ -1950,7 +2205,7 @@ function activateNode(){
   const c = newCode();
   ensureUser(c, {}); saveDB(); setMe(c);
   renderAll({burst:true});
-  toast('Узел активирован: ' + c);
+  toast('Узел создан: ' + c);
   TG.haptic('notify','success');
 }
 $('#shareBtn').onclick = () => {
@@ -1960,13 +2215,40 @@ $('#shareBtn').onclick = () => {
 };
 $('#recenterBtn').onclick = () => { recenter(); TG.haptic('select'); };
 /* ⚠ демо: кнопка QA внутри приложения (в т.ч. в Telegram, где ?admin=1 не набрать).
-   Выключается флагом qaButton в config.js — см. README, раздел QA. */
-if(CFG.qaButton){
+   Видна только администраторам беты (CFG.admins) и выключается флагом
+   qaButton в config.js — см. README, раздел «Бета-админка». */
+if(CFG.qaButton && clientAdmin()){
   $('#qaBtn').hidden = false;
   $('#qaBtn').onclick = () => openAdmin();
 }
-$('#infoBtn').onclick = () => openHost('#infoHost');
-$('#ticketFab').onclick = () => openCheckout('regular');
+/* Инфо — короткие вопрос/ответ вместо описательного абзаца: так же,
+   как памятки в канале. Текст зависит от режима: живая оплата или тест. */
+function renderInfo(){
+  const open = betaOpenList().map(i => TIERS[i].skill + ' (' + TIERS[i].n + ')').join(' · ');
+  const live = payMode() === 'live';
+  const qa = [
+    ['Что это',            'Билеты и реферальная сеть. Позвал — друг оплатил — тебе узел.'],
+    ['Что даёт узел',      [0,1,3,4].map(i => TIERS[i].n + ' → ' + TIERS[i].line).join('. ') + '.'],
+    ['Когда засчитывается','После оплаты приглашённого. За переход по ссылке — нет.'],
+    ['Как забрать',        'Держи палец на узле, пока кольцо не заполнится.'],
+    ['Почему часть в тумане', 'Это бета. Открыто: ' + open + '. Мерч и пожизненные бонусы — позже.'],
+    ['Оплата',             live ? 'Через банк, на стороне платёжной системы. Приложение карту не видит.'
+                                : 'Имитация: карта никуда не уходит, деньги не списываются, билет не выдаётся.'],
+    ['Где хранится прогресс', live ? 'Узлы и оплату считает сервер бота. Локально — только кэш.'
+                                   : 'В localStorage этой вкладки и в CloudStorage аккаунта Telegram.']
+  ];
+  if(CFG.support) qa.push(['Вопросы', String(CFG.support)]);
+  $('#infoSheet').innerHTML = `
+    <div class="sheet__grab" aria-hidden="true"></div>
+    <button class="sheet__close" data-close aria-label="Закрыть">✕</button>
+    <h3 id="infoTitle">Как это работает</h3>
+    <ul class="faq">${qa.map(([q, a]) =>
+      `<li><b>${esc(q)}</b><span>${esc(a)}</span></li>`).join('')}</ul>
+    <p class="mono muted" style="margin:14px 0 0">${esc(EVENT_LINE)}</p>
+    <button class="btn btn--ghost btn--wide" data-close style="margin-top:var(--s3)">Закрыть</button>`;
+}
+$('#infoBtn').onclick = () => { renderInfo(); openHost('#infoHost'); };
+$('#ticketFab').onclick = () => openCheckout();
 
 /* тап по знаку в баре: активация узла; пять тапов подряд — скрытый вход в админку */
 let idTaps = 0, idTapT = 0;
@@ -2033,56 +2315,134 @@ const V = {
   email(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()) ? '' : 'Формат: name@domain.ru'; }
 };
 
-let currentTicket = null, submitting = false;
+let submitting = false;
+/* выбор в чекауте: состав (одиночный/парный/тройной) × класс (обычный/VIP) */
+let coSel = {size:'solo', cls:'std'};
+const coPrice = () => comboPrice(coSel.cls, coSel.size, refCount(myUser()), priceOpts());
+const coName  = () => (sizeOf(coSel.size)||{}).name + ' · ' + (ECON.classOf(coSel.cls)||{}).name;
 
-/* связь дерева и билета: скидку даёт конкретный скилл ветви */
-function discountNote(c){
-  if(c >= 3) return 'Бесплатная проходка · скилл ' + TIERS[1].skill;
-  if(c >= 1) return '−20% применена · скилл ' + TIERS[0].skill;
-  return '';
-}
-function openCheckout(id){
-  currentTicket = TICKETS.find(t => t.id === id) || TICKETS[1];
+/* Живая оплата — только внутри Telegram и только с бэкендом: счёт выставляет
+   сервер (provider_token живёт там), деньги подтверждает вебхук
+   successful_payment. Всё остальное — клиентская имитация, помеченная тестом. */
+const payMode = () => (TG.on && API) ? 'live' : 'demo';
+
+function openCheckout(){
   renderCheckout();
   openHost('#coHost');
   TG.haptic('impact','light');
-  // фокус в поле карты не ставим: иначе лист сразу уезжает к форме и прячет выбор тарифа
+  // фокус в поле карты не ставим: иначе лист сразу уезжает к форме и прячет выбор
 }
 function renderCheckout(){
   const c = refCount(myUser());
-  const price = effPrice(currentTicket.price, c);
+  const price = coPrice();
   const attr = readAttr();
-  const disc = discountNote(c);
+  const notes = priceNotes(coSel.cls, coSel.size, c, priceOpts());
+
+  const segSize = TICKET_SIZE.map(s => `
+    <button type="button" data-size="${s.id}" aria-pressed="${s.id===coSel.size}">
+      <b>${esc(s.name)}</b><span>${s.qty} ${plural(s.qty,'вход','входа','входов')}</span>
+    </button>`).join('');
+  const segCls = TICKET_CLASS.map(k => {
+    const p = classPrice(k.id);
+    const vipFree = k.id === 'vip' && hasClaim(VIP_TIER);
+    return `<button type="button" data-cls="${k.id}" aria-pressed="${k.id===coSel.cls}">
+      <b>${esc(k.name)}</b><span>${vipFree ? 'без наценки' : (p === null ? esc(k.note) : priceLabel(p))}</span>
+    </button>`;
+  }).join('');
+
   $('#coSheet').innerHTML = `
     <div class="sheet__grab" aria-hidden="true"></div>
     <button class="sheet__close" data-close aria-label="Закрыть чекаут">✕</button>
-    <h3 id="coTitle">Допуск</h3>
+    <h3 id="coTitle">Билет</h3>
     <p class="mono muted" style="margin:8px 0 0">${esc(EVENT_LINE)}</p>
-    <div class="tk" id="tkList">
-      ${TICKETS.map(t => {
-        const p = effPrice(t.price, c);
-        const cut = p !== t.price && t.price !== null;
-        return `<button type="button" data-tk="${t.id}" aria-pressed="${t.id===currentTicket.id}">
-          <span><span class="n">${esc(t.name)}</span><span class="s">${esc(t.note)} · ${esc(t.perks[0])}</span></span>
-          <span class="p">${cut?`<s>${money(t.price)}</s>`:''}${priceLabel(p)}</span>
-        </button>`;
-      }).join('')}
+
+    <div class="seglab mono muted">Состав</div>
+    <div class="seg seg--3" id="segSize" role="group" aria-label="Состав билета">${segSize}</div>
+    <div class="seglab mono muted">Класс</div>
+    <div class="seg seg--2" id="segCls" role="group" aria-label="Класс билета">${segCls}</div>
+
+    <div class="order">
+      <span class="mono muted">${esc(coName())}</span>
+      <span class="sum">${priceLabel(price)}</span>
     </div>
-    ${disc ? `<div class="disc">${esc(disc)}</div>` : ''}
-    <div class="order"><span class="mono muted">К оплате</span><span class="sum">${priceLabel(price)}</span></div>
+    ${notes.length ? `<div class="disc">${notes.map(esc).join(' · ')}</div>` : ''}
+    ${price === null ? `<ul class="colist"><li>Цена не объявлена — оплата выключена. Числа ставятся в config.js → prices.</li></ul>` : ''}
     <p class="attrline" id="coAttr">${attr
-      ? `Атрибуция: <b>${esc(attr.code)}</b> · истекает через ${Math.ceil((attr.ts+ATTR_TTL-Date.now())/86400000)} дн.`
-      : 'Атрибуция: нет'}</p>
-    <div class="testbanner">Тестовый платёж · деньги не списываются · данные карты никуда не отправляются</div>
+      ? `Пришёл по узлу <b>${esc(attr.code)}</b> · ещё ${Math.ceil((attr.ts+ATTR_TTL-Date.now())/86400000)} дн.`
+      : 'Ссылки нет — узел никому не засчитается'}</p>
+    ${payMode() === 'live'
+      ? `<div class="livebanner">Оплата картой или СБП · счёт выставляет бот · билет придёт в чат</div>`
+      : `<div class="testbanner">Тест · деньги не списываются · карта никуда не уходит</div>`}
     <div id="coMain"></div>`;
-  $('#tkList').addEventListener('click', e => {
-    const b = e.target.closest('[data-tk]');
-    if(!b) return;
-    currentTicket = TICKETS.find(t => t.id === b.dataset.tk);
-    TG.haptic('select');
+
+  const pick = (el, key, val) => {
+    if(!el) return;
+    el.addEventListener('click', e => {
+      const b = e.target.closest('[data-' + key + ']');
+      if(!b) return;
+      coSel[val] = b.dataset[key];
+      TG.haptic('select');
+      renderCheckout();
+    });
+  };
+  pick($('#segSize'), 'size', 'size');
+  pick($('#segCls'),  'cls',  'cls');
+
+  if(payMode() === 'live') renderInvoice(price);
+  else renderForm(price);
+}
+
+/* --- живая оплата: счёт создаёт бэкенд, окно открывает Telegram --- */
+function renderInvoice(price){
+  $('#coMain').innerHTML = `
+    <ul class="colist">
+      <li>Оплата проходит на странице банка, приложение карту не видит</li>
+      <li>Билет и QR придут сообщением от бота</li>
+      <li>Узел засчитывается пригласившему после оплаты</li>
+    </ul>
+    <button class="btn btn--toxic btn--wide" id="payBtn" ${price===null?'disabled':''} style="margin-top:var(--s2)">
+      ${price===null ? 'Цена не объявлена' : 'Оплатить ' + priceLabel(price)}</button>`;
+  const btn = $('#payBtn');
+  if(price === null) return;
+  btn.onclick = payLive;
+  TG.mainShow('Оплатить ' + priceLabel(price), payLive);
+}
+async function payLive(){
+  if(submitting) return;                                  // защита от двойного сабмита
+  const price = coPrice();
+  if(price === null){ toast('Цена не объявлена', true); return; }
+  submitting = true;
+  const btn = $('#payBtn');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin" aria-hidden="true"></span> Выставляем счёт'; }
+  TG.mainProgress(true);
+  try {
+    const r = await fetch(API + '/api/invoice', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({initData: WA.initData, cls: coSel.cls, size: coSel.size,
+                            ref: (readAttr() || {}).code || ''})
+    });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok || !j.link) throw new Error(j.error || 'счёт не выставлен');
+    TG.mainProgress(false);
+    WA.openInvoice(j.link, status => {
+      submitting = false;
+      if(status === 'paid'){ TG.haptic('notify','success'); afterPaid(); return; }
+      if(status === 'failed'){ TG.haptic('notify','error'); toast('Платёж не прошёл', true); }
+      else if(status === 'cancelled') toast('Оплата отменена');
+      renderCheckout();
+    });
+  } catch(err){
+    submitting = false;
+    TG.mainProgress(false);
+    toast(String(err.message || err), true);
     renderCheckout();
-  });
-  renderForm(price);
+  }
+}
+/* после оплаты состояние берём с сервера: узлы и «оплачено» считает он */
+async function afterPaid(){
+  const s = await stateFetch();
+  if(s) applyServerState(s);
+  showSuccess({code: me() || '—', duplicate:false, credited: s && s.invitedBy, live:true});
 }
 
 function renderForm(price){
@@ -2234,12 +2594,9 @@ function settlePurchase({email, name}){
     if(!user.referredBy) user.referredBy = attr.code;
   }
   saveDB();
-  if(TG.on && CFG.apiBase){                                   // отметка об оплате для бота
-    fetch(CFG.apiBase.replace(/\/+$/,'') + '/api/purchase', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({initData: WA.initData, code})
-    }).catch(()=>{});
-  }
+  /* Серверу об оплате не сообщаем: в живом режиме узел начисляет вебхук
+     successful_payment, а не клиент. Этот путь — только локальная
+     имитация для браузера и автотестов. */
   return {code, duplicate:false, credited, buyerId};
 }
 
@@ -2261,29 +2618,30 @@ function showSuccess(res){
   const u = DB.users[res.code];
   const c = refCount(myUser());
   $('#coMain').innerHTML = `
-    <div class="mono" style="color:var(--accent-toxic);margin-top:var(--s2)">Тестовый платёж проведён · деньги не списаны</div>
+    <div class="mono" style="color:var(--accent-toxic);margin-top:var(--s2)">${
+      res.live ? 'Оплачено · билет ушёл в чат от бота' : 'Тест пройден · деньги не списаны'}</div>
     <div class="pass">
       <div>
-        <h3 style="font-size:22px">${esc(currentTicket.name)}</h3>
+        <h3 style="font-size:22px">${esc(coName())}</h3>
         <div class="mono muted" style="margin-top:6px">${esc(EVENT_LINE)}</div>
         <dl>
-          <dt>Держатель</dt><dd>${esc((u && u.name) || '—')}</dd>
-          <dt>Допуск</dt><dd>${esc(res.code)}</dd>
+          <dt>Кто</dt><dd>${esc((u && u.name) || '—')}</dd>
+          <dt>Узел</dt><dd>${esc(res.code)}</dd>
           <dt>Уровень</dt><dd>${tierName(c)}</dd>
-          <dt>Статус</dt><dd>${res.duplicate?'уже был выдан ранее':'выдан'}</dd>
+          <dt>Входов</dt><dd>${(sizeOf(coSel.size)||{}).qty || 1}</dd>
         </dl>
       </div>
-      <div><div class="qr" id="qrBox"></div><div class="qr__cap">QR-ЗАГЛУШКА</div></div>
+      <div><div class="qr" id="qrBox"></div><div class="qr__cap">${res.live ? 'QR В ЧАТЕ' : 'QR-ЗАГЛУШКА'}</div></div>
     </div>
     <div class="mono ${res.credited?'':'muted'}" style="margin-top:12px;${res.credited?'color:var(--accent-toxic)':''}">${
       res.credited ? 'Узел засчитан ветви ' + esc(res.credited)
-      : res.duplicate ? 'Этот покупатель уже брал допуск — повторный узел не начислен'
-      : 'Реферальная атрибуция не найдена — узел никому не начислен'}</div>
+      : res.duplicate ? 'Этот покупатель уже брал билет — второй узел не начислен'
+      : 'Ссылки не было — узел никому не начислен'}</div>
     <div class="field">
-      <input readonly value="${esc(refLink(res.code))}" aria-label="Твоя реферальная ссылка">
+      <input readonly value="${esc(refLink(res.code))}" aria-label="Твоя ссылка">
       <button class="btn" id="copyAfter">Копировать</button>
     </div>
-    <button class="btn btn--toxic btn--wide" id="toTree" style="margin-top:12px">К дереву узлов</button>
+    <button class="btn btn--toxic btn--wide" id="toTree" style="margin-top:12px">К дереву</button>
     <button class="btn btn--flat btn--wide" id="shareAfter" style="margin-top:10px">Позвать своих →</button>`;
   $('#qrBox').appendChild(pseudoQR(res.code));
   $('#copyAfter').onclick = () => copy(refLink(res.code), 'Ссылка скопирована');
@@ -2295,11 +2653,10 @@ function showSuccess(res){
 function showDecline(){
   $('#coMain').innerHTML = `
     <div class="decline">
-      <h3 style="font-size:20px;color:var(--accent-secondary)">Платёж отклонён</h3>
-      <p>Банк-эмитент отклонил операцию (код <b>05 · do not honor</b>). Средства не списаны, допуск не выдан,
-         узел рефереру не засчитан.</p>
+      <h3 style="font-size:20px;color:var(--accent-secondary)">Отказ банка</h3>
+      <p>Код 05 · do not honor. Деньги не списаны, билет не выдан, узел не засчитан.</p>
     </div>
-    <button class="btn btn--wide" id="retry" style="margin-top:var(--s2)">Повторить попытку</button>`;
+    <button class="btn btn--wide" id="retry" style="margin-top:var(--s2)">Ещё раз</button>`;
   $('#retry').onclick = () => renderCheckout();
   renderAll();
 }
@@ -2335,6 +2692,37 @@ function nodeLabel(id){
   return maskEmail(id);
 }
 
+/* ---------- сервер как источник правды ----------
+   Пока бэкенда нет, приложение живёт на localStorage (демо-уровень).
+   Как только apiBase задан, узлы и «оплачено» считает сервер: клиент
+   подменяет локальные значения серверными, а localStorage остаётся
+   кэшем на случай офлайна. Начисление узла клиент не делает вообще —
+   это решает вебхук об оплате.                                        */
+async function stateFetch(){
+  if(!API || !TG.on) return null;
+  try {
+    const r = await fetch(API + '/api/state', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({initData: WA.initData})
+    });
+    if(!r.ok) return null;
+    const j = await r.json();
+    return (j && j.code) ? j : null;
+  } catch(e){ return null; }
+}
+function applyServerState(s){
+  if(!s || !s.code) return;
+  let code = me();
+  if(code !== s.code){ ensureUser(s.code, {}); setMe(s.code); code = s.code; }
+  const u = ensureUser(code, {paid: !!s.paid});
+  if(Array.isArray(s.refs))            u.referrals = s.refs.map(String);
+  else if(typeof s.refs === 'number')  u.referrals = Array.from({length:s.refs}, (_,k) => 'srv:' + k);
+  if(s.invitedBy) u.referredBy = String(s.invitedBy);
+  if(Array.isArray(s.betaOpen) && s.betaOpen.length) setBetaOpen(s.betaOpen);
+  saveDB();
+  renderAll();                       // renderAll сам покажет тост про новый узел
+}
+
 async function crewFetch(){
   if(!CFG.apiBase || !TG.on) return null;
   try {
@@ -2366,20 +2754,20 @@ function linkAccount(){
 function crewGate(){
   if(!TG.on) return `
     <div class="gate">
-      <h4>Свои живут в Telegram</h4>
-      <p>Сверка работает внутри мини-приложения: там есть аккаунт и диплинк. В браузере доступны твоя ветвь и общая ссылка.</p>
+      <h4>Список живёт в Telegram</h4>
+      <p>В браузере видна только твоя ветвь. Полный список — в мини-приложении.</p>
       ${CFG.bot ? `<a class="btn" href="https://t.me/${esc(CFG.bot)}${CFG.app?'/'+esc(CFG.app):''}" target="_blank" rel="noopener">Открыть в Telegram</a>`
                 : `<span class="src">бот не настроен · config.js</span>`}
     </div>`;
   if(!CFG.apiBase) return `
     <div class="gate">
-      <h4>Живой список выключен</h4>
-      <p>Кто именно уже взял допуск, знает бот — у него записано, кто по чьей ссылке пришёл. Пропиши <b>apiBase</b> в config.js, и вместо демо-контактов появится реальная ветвь.</p>
+      <h4>Показаны демо-контакты</h4>
+      <p>Реальный список ведёт бот. Пропиши <b>apiBase</b> в config.js — демо сменится на твою ветвь.</p>
     </div>`;
   if(!crewLinked) return `
     <div class="gate">
       <h4>Привязать аккаунт</h4>
-      <p>Бот свяжет твой Telegram с узлом и покажет, кто пришёл по твоей ссылке, кто позвал тебя и кто стоит с тобой в одной ветви. Адресная книга при этом не читается.</p>
+      <p>Бот свяжет Telegram с узлом и покажет, кто пришёл по ссылке и кто позвал тебя. Контакты не читаются.</p>
       <button class="btn btn--toxic" id="linkAcc">Привязать через бота</button>
     </div>`;
   return '';
@@ -2419,7 +2807,7 @@ function renderCrew(fresh){
       <div class="crew__sub"><span class="mono muted">Уже идут</span><span class="mono muted">${going.length}</span></div>
       <div class="crew">${going.map(m => card(m,'going')).join('')}</div>` : `
       <div class="crew__sub"><span class="mono muted">Уже идут</span><span class="mono muted">0</span></div>
-      <div class="empty">Пока никого. Первый узел появится здесь, как только кто-то пройдёт по твоей ссылке и получит допуск.</div>`}
+      <div class="empty">Пока никого. Первый появится здесь, когда пройдёт по твоей ссылке и оплатит билет.</div>`}
     ${invite.length ? `
       <div class="crew__sub"><span class="mono muted">Можно позвать</span><span class="mono muted">${invite.length}</span></div>
       <div class="crew">${invite.map(m => card(m,'invite')).join('')}</div>` : ''}
@@ -2455,8 +2843,9 @@ function renderAll(opts){
   renderCrew(opts && opts.fresh);
   syncEnergy();
   const ti = tierIndex(c);
-  if(ti > lastTier && lastTier !== -99){
-    toast('Открыт узел: ' + TIERS[ti].skill + ' · удерживай знак');
+  // про узлы под туманом не объявляем: в бете их всё равно не забрать
+  if(ti > lastTier && lastTier !== -99 && inBeta(ti)){
+    toast('Открыт узел: ' + TIERS[ti].skill + ' · держи знак');
     TG.haptic('notify','success');
     // камеру двигаем только на честный шаг «+1 уровень», а не на QA-скачок
     const n = nodeByTier(ti);
@@ -2476,10 +2865,70 @@ function renderAll(opts){
 const ADMIN = {allUnlocked:false};
 const admOn = QS.get('admin') === '1' || QS.get('devpanel') === '1';
 
+/* ---------- доступ ----------
+   Вне Telegram панель — локальный QA-инструмент: она правит только
+   localStorage этой вкладки, поэтому открыта (иначе браузерная приёмка
+   и автотесты невозможны).
+   Внутри Telegram — allowlist: id не из CFG.admins не открывает панель ни
+   по ?admin=1, ни пятью тапами по знаку. Живые данные беты (тестеры,
+   платежи, туман для всех) приходят только после подтверждения бэкендом:
+   CFG.admins — подсказка интерфейса, решение принимает сервер по своему
+   ADMIN_TG_IDS поверх проверенной initData. */
+function clientAdmin(){
+  if(!CFG.panel) return false;                               // сборка для тестера: панели нет вовсе
+  if(!TG.on) return true;                                    // браузерный QA — локальный
+  return (CFG.admins || []).map(String).indexOf(String(TG.user && TG.user.id)) >= 0;
+}
+let betaAdmin = false;          // доступ подтверждён бэкендом
+let betaData  = null;           // {testers:[…], payments:[…], betaOpen:[…]}
+
 function openAdmin(){
+  if(!clientAdmin()){           // тестер не должен даже видеть панель
+    toast('Раздел недоступен', true);
+    TG.haptic('notify','error');
+    return;
+  }
   renderAdmin();
   openHost('#admHost');
   TG.haptic('impact','medium');
+  if(TG.on && API && !betaAdmin) betaSync();
+}
+
+async function betaApi(path, body){
+  if(!API || !TG.on) return null;
+  try {
+    const r = await fetch(API + path, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(Object.assign({initData: WA.initData}, body || {}))
+    });
+    if(r.status === 401 || r.status === 403){ betaAdmin = false; return {denied:true}; }
+    if(!r.ok) return null;
+    return await r.json();
+  } catch(e){ return null; }
+}
+async function betaSync(){
+  const j = await betaApi('/api/admin/overview');
+  if(!j || j.denied){
+    betaAdmin = false;
+    if(j && j.denied) toast('Бэкенд не подтвердил доступ', true);
+  } else {
+    betaAdmin = true; betaData = j;
+    if(Array.isArray(j.betaOpen) && j.betaOpen.length) setBetaOpen(j.betaOpen);
+  }
+  if(!$('#admHost').hidden){ renderAdmin(); renderAll(); }
+}
+/* туман правится на лету: локально всегда, на сервере — если доступ подтверждён */
+async function betaToggle(i){
+  const list = betaOpenList();
+  const k = list.indexOf(i);
+  if(k >= 0) list.splice(k, 1); else list.push(i);
+  setBetaOpen(list);
+  logEvent(k >= 0 ? 'fog·closed' : 'fog·opened', TIERS[i].skill);
+  renderAll(); renderAdmin();
+  if(betaAdmin){
+    const j = await betaApi('/api/admin/beta', {betaOpen: betaOpenList()});
+    if(!j || j.denied) toast('Локально сохранено, сервер не принял', true);
+  }
 }
 function rawState(){
   return JSON.stringify({
@@ -2491,12 +2940,65 @@ function rawState(){
 }
 function renderAdmin(){
   const u = myUser(), c = refCount(u);
+
+  /* --- туман: что открыто тестерам прямо сейчас --- */
+  const fogGrid = TIERS.map((t, i) => {
+    const open = inBeta(i);
+    return `<button class="fogsw" data-adm="fog" data-i="${i}" aria-pressed="${open}">
+      <b>${esc(t.skill)}</b><span>${t.n} · ${open ? 'в бете' : 'туман'}</span></button>`;
+  }).join('');
+
+  /* --- живые данные беты: только с подтверждённым доступом --- */
+  const testers = (betaAdmin && betaData && Array.isArray(betaData.testers)) ? betaData.testers : null;
+  const pays    = (betaAdmin && betaData && Array.isArray(betaData.payments)) ? betaData.payments : null;
+  const betaLive = betaAdmin
+    ? `<div class="adm__t adm__t--head mono"><span>Тестеры: ${testers ? testers.length : 0}</span>
+         <button class="btn btn--ghost" data-adm="betasync" style="padding:6px 10px;font-size:9.5px">Обновить</button></div>
+       ${testers && testers.length ? testers.map(x => `
+         <div class="adm__t${x.revoked ? ' off' : ''}">
+           <div><b>${esc(x.name || String(x.id))}</b>
+                <span>${x.username ? '@' + esc(x.username) : esc(String(x.id))}</span></div>
+           <div class="mono">${x.paid ? 'оплатил' : 'открыл'} · ${+x.refs || 0} узл.${x.revoked ? ' · отозван' : ''}</div>
+           <button data-adm="${x.revoked ? 'allow' : 'revoke'}" data-id="${esc(String(x.id))}">${
+             x.revoked ? 'вернуть' : 'отозвать'}</button>
+         </div>`).join('') : '<div class="empty">Ещё никто не заходил по бета-ссылке.</div>'}`
+    : `<div class="empty">Живые данные приходят с бэкенда: нужен <b>apiBase</b> в config.js,
+         запуск внутри Telegram и твой id в <b>ADMIN_TG_IDS</b> на сервере.</div>
+       <div class="adm__row" style="margin-top:6px">
+         <button class="btn btn--ghost" data-adm="betasync">Проверить доступ</button>
+       </div>`;
+
+  const payRows = pays && pays.length
+    ? pays.map(p => `${new Date(+p.ts || Date.now()).toLocaleString('ru-RU')} · <i>${esc(String(p.id || '—'))}</i> · ${
+        esc(String(p.size || '—'))}/${esc(String(p.cls || '—'))} · ${
+        (+p.amount || 0) / 100} ${esc(String(p.currency || 'RUB'))} · ${
+        p.status === 'paid' ? '<b>оплачен</b>' : esc(String(p.status || '—'))}`).join('<br>')
+    : (betaAdmin ? 'платежей нет' : 'нет доступа');
+
   $('#admSheet').innerHTML = `
     <div class="sheet__grab" aria-hidden="true"></div>
     <button class="sheet__close" data-close aria-label="Закрыть">✕</button>
-    <h3 id="admTitle" style="font-size:24px">ADMIN / QA</h3>
+    <h3 id="admTitle" style="font-size:24px">БЕТА / QA</h3>
     <div class="adm">
-      <div class="adm__warn">Не для боевого использования · панель правит локальную демо-БД</div>
+      <div class="adm__warn">Скрыто от тестеров · ${betaAdmin
+        ? 'доступ подтверждён бэкендом: правки тумана видят все'
+        : 'локальный режим: правки видит только этот браузер'}</div>
+
+      <section>
+        <h4>Туман · что открыто в бете</h4>
+        <div class="adm__fog">${fogGrid}</div>
+        <div class="mono muted" style="margin-top:8px">Открыто: ${betaOpenList().length} из ${TIERS.length}</div>
+      </section>
+
+      <section>
+        <h4>Тестеры · воронка</h4>
+        ${betaLive}
+      </section>
+
+      <section>
+        <h4>Платежи теста</h4>
+        <div class="adm__log">${payRows}</div>
+      </section>
 
       <section>
         <h4>Состояние узла</h4>
@@ -2527,8 +3029,9 @@ function renderAdmin(){
         <div class="adm__grid">
           ${TIERS.map((t,i) => {
             const st = nodeState(i);
+            const stLabel = st===2 ? 'получен' : st===1 ? 'доступен' : st===-1 ? 'туман' : 'заблок.';
             return `<div class="adm__skill">
-              <div class="h"><b>${esc(t.skill)}</b><span>${t.n} узл · ${st===2?'получен':(st===1?'доступен':'заблок.')}</span></div>
+              <div class="h"><b>${esc(t.skill)}</b><span>${t.n} узл · ${stLabel}</span></div>
               <div class="r">
                 <button data-adm="pv-open" data-i="${i}">open</button>
                 <button data-adm="pv-claim" data-i="${i}">claim</button>
@@ -2552,6 +3055,7 @@ function renderAdmin(){
         <div class="adm__row" style="margin-top:6px">
           <button class="btn btn--ghost" data-adm="copyraw">Копировать</button>
           <button class="btn btn--ghost" data-adm="applyraw">Применить JSON</button>
+          <button class="btn btn--ghost" data-adm="exportlog">Выгрузить лог</button>
           <button class="btn btn--ghost" data-adm="reset">Сбросить всё</button>
         </div>
       </section>
@@ -2569,6 +3073,28 @@ $('#admSheet').addEventListener('click', e => {
   const b = e.target.closest('[data-adm]'); if(!b) return;
   const act = b.dataset.adm, i = +b.dataset.i;
   const ensureMe = () => { let code = me(); if(!code){ code = newCode(); ensureUser(code,{}); setMe(code); } return code; };
+
+  /* ---------- управление бетой ---------- */
+  if(act === 'fog'){ betaToggle(i); return; }
+  if(act === 'betasync'){ betaSync(); return; }
+  if(act === 'revoke' || act === 'allow'){
+    betaApi('/api/admin/tester', {id: b.dataset.id, action: act}).then(j => {
+      if(!j || j.denied){ toast('Сервер не принял', true); return; }
+      toast(act === 'revoke' ? 'Тестер отозван' : 'Тестер возвращён');
+      betaSync();
+    });
+    return;
+  }
+  if(act === 'exportlog'){
+    copy(JSON.stringify({
+      betaOpen: betaOpenList(),
+      log: LOG,
+      testers: (betaData && betaData.testers) || null,
+      payments: (betaData && betaData.payments) || null,
+      state: JSON.parse(rawState())
+    }, null, 2), 'Лог скопирован');
+    return;
+  }
 
   if(act === 'setrefs' || act === '+1' || act === '+5'){
     const code = ensureMe(), u = ensureUser(code, {});
@@ -2639,6 +3165,21 @@ energy = energyTarget;
 setTab('tree');
 if(admOn) openAdmin();
 
+/* Хук для автотестов: узлы живут на канве, у них нет DOM-элементов, поэтому
+   e2e нужно откуда-то брать их координаты и состояние. Включается только
+   явным ?e2e=1 — в обычном запуске этого объекта не существует. */
+if(QS.get('e2e') === '1'){
+  window.__RZ = {
+    node: i => { const n = nodeByTier(i); return n ? {x:n.sx, y:n.sy, st:nodeState(i)} : null; },
+    beta: () => betaOpenList(),
+    bounds: () => camBounds(),
+    fogAhead: (axis, dir) => fogAhead(axis, dir),
+    refs: () => refCount(myUser()),
+    claims: () => claims().slice(),
+    boot: () => BOOT.phase
+  };
+}
+
 addEventListener('resize', () => { resize(); }, {passive:true});
 new ResizeObserver(() => resize()).observe($('#stage'));
 document.addEventListener('visibilitychange', () => {
@@ -2654,12 +3195,14 @@ cloudPull(() => {
   renderAll();
   toast('Узел восстановлен из Telegram');
 });
-if(TG.on && CFG.apiBase){
+if(TG.on && API){
   const a = readAttr();
-  fetch(CFG.apiBase.replace(/\/+$/,'') + '/api/visit', {
+  fetch(API + '/api/visit', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({initData: WA.initData, ref: a ? a.code : ''})
-  }).catch(()=>{}).then(() => crewFetch())
+  }).catch(()=>{})
+    .then(() => stateFetch())
+    .then(s => { if(s) applyServerState(s); return crewFetch(); })
     .then(list => { if(list){ crewRemote = list; renderCrew(); } })
     .catch(()=>{});
 }
