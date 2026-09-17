@@ -44,8 +44,7 @@ test.describe('туман войны', () => {
     expect(await page.evaluate(() => window.__RZ.claims())).toEqual([]);
 
     const hold = page.locator('#holdBtn');
-    const box = await hold.boundingBox();
-    await page.mouse.move(box.x + box.width/2, box.y + box.height/2);
+    await hold.hover();          // лист выезжает анимацией: ждём, пока кнопка встанет
     await page.mouse.down();
     await page.waitForTimeout(400);
     await page.mouse.up();                        // отпустили раньше — отмена
