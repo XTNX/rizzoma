@@ -468,9 +468,13 @@ Bot API присылает боту `chat_member`, `message_reaction`, `chat_boo
 
 ```bash
 npm install
-npm test          # экономика, баллы за канал, приём Telegram-апдейтов
-npm run test:e2e  # Playwright: туман, кромка, чекаут, админка, блок активности
+npm install --prefix bot   # интеграционные тесты импортируют настоящий bot/bot.js
+npm test                   # экономика, баллы за канал, приём Telegram-апдейтов
+npm run test:e2e           # Playwright: туман, кромка, чекаут, админка, активность
 ```
+
+Без зависимостей бэкенда `tests/engagement.bot.test.mjs` не запустится — он поднимает
+настоящий `bot.js`, которому нужны `grammy` и `express`.
 
 | Файл | Что проверяет |
 |---|---|
