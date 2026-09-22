@@ -24,7 +24,15 @@ window.Telegram = { WebApp: {
                showProgress(){return this;}, hideProgress(){return this;},
                onClick(){return this;}, offClick(){return this;} },
   BackButton:{ show(){return this;}, hide(){return this;},
-               onClick(){return this;}, offClick(){return this;} }
+               onClick(){return this;}, offClick(){return this;} },
+  /* CloudStorage пишет в window.__cloud — так тест видит, какие ключи
+     приложение синхронизирует между устройствами, а какие оставляет
+     локальными (см. решение про баллы за канал в README). */
+  CloudStorage:{
+    setItem(k, v, cb){ (window.__cloud = window.__cloud || {})[k] = v; cb && cb(null, true); return this; },
+    removeItem(k, cb){ if(window.__cloud) delete window.__cloud[k]; cb && cb(null, true); return this; },
+    getItems(keys, cb){ cb && cb(null, {}); return this; }
+  }
 }};`;
 
 /** Открыть приложение. opts: {tg:false|id, config:{…}} */

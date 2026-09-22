@@ -5,7 +5,7 @@
   "description": "RIZZOMA — Telegram Mini App: дерево узлов, билеты, реферальная сеть. Статика без сборки; package.json нужен только автотестам.",
   "scripts": {
     "serve": "node tests/serve.mjs",
-    "test": "node --test tests/economy.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run test:e2e"
   },

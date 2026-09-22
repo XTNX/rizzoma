@@ -18,6 +18,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import express from 'express';
 import { Bot, InlineKeyboard } from 'grammy';
 
@@ -25,6 +26,7 @@ import { Bot, InlineKeyboard } from 'grammy';
    правилам на клиенте и на сервере, но решает всегда сервер */
 const require = createRequire(import.meta.url);
 const ECON = require('../economy.js');
+const ENG  = require('../engagement.js');
 
 const TOKEN      = process.env.BOT_TOKEN;
 const APP_URL    = process.env.APP_URL;                       // https://…/index.html
@@ -44,6 +46,25 @@ const PRICES = {
 const ADMINS = String(process.env.ADMIN_TG_IDS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
+/* Активность в канале. CHANNEL_ID — числовой id (не @username), узнаётся
+   один раз через getChat. Без него баллы не начисляются вообще: иначе бот,
+   которого позвали в любой чужой чат, начал бы там раздавать очки.
+   DISCUSSION_ID — привязанная группа обсуждений, если она есть; пока её нет,
+   комментарии просто не приходят и правило 'comment' не срабатывает. */
+const CHANNEL_ID    = idOrNull(process.env.CHANNEL_ID);
+const DISCUSSION_ID = idOrNull(process.env.DISCUSSION_ID);
+
+/* Telegram не присылает эти типы по умолчанию — даже администратору.
+   Их нужно назвать явно при старте, иначе обработчики ниже молча мертвы. */
+const ALLOWED_UPDATES = [
+  'message', 'callback_query', 'pre_checkout_query',
+  'chat_member', 'message_reaction', 'chat_boost', 'removed_chat_boost'
+];
+
+function idOrNull(v){
+  const n = Number(v);
+  return (v === undefined || v === '' || !isFinite(n) || n === 0) ? null : n;
+}
 function numOrNull(v){
   const n = Number(v);
   return (v === undefined || v === '' || !isFinite(n) || n < 0) ? null : Math.round(n);
@@ -60,12 +81,19 @@ if(!TOKEN || !APP_URL){
 }
 if(!ADMINS.length) console.warn('ADMIN_TG_IDS пуст: бета-админка не откроется ни для кого');
 if(!PROVIDER_TOKEN) console.warn('PROVIDER_TOKEN пуст: счета не выставляются, оплата недоступна');
+if(!CHANNEL_ID) console.warn('CHANNEL_ID пуст: баллы за активность в канале не начисляются');
 
 /* ---------- хранилище ---------- */
 const users = new Map();   // tgId -> {id,name,username,photo,code,invitedBy,paid,revoked,ts}
 const codes = new Map();   // code -> tgId
 const payments = [];       // журнал платежей теста (последние 200)
 let betaOpen = parseList(process.env.BETA_OPEN) || ECON.BETA_OPEN.slice();
+
+/* Баллы за канал живут отдельно от users: реакцию может поставить человек,
+   который приложение ни разу не открывал. Заводить ему узел дерева и
+   показывать его в воронке тестеров было бы враньём — связываются они
+   по tgId в момент, когда он всё-таки зайдёт в приложение. */
+const engagement = new Map();   // tgId -> {points, events:[…]} (ledger из engagement.js)
 
 const ALPHA = 'ACDEFHJKLMNPRTUVWXY3479';
 function newCode(){
@@ -207,6 +235,85 @@ bot.on('message:successful_payment', async ctx => {
   }
 });
 
+/* ==================== АКТИВНОСТЬ В КАНАЛЕ ====================
+   Ловим только то, что Telegram действительно отдаёт боту-администратору:
+   подписку, реакцию на пост и буст канала (плюс комментарий, если к каналу
+   когда-нибудь привяжут группу обсуждений). Просмотры, пересылки и история
+   до момента, когда бота сделали админом, Bot API не отдаёт никому — их
+   здесь нет и не появится.
+   Всю арифметику делает engagement.js, здесь только фильтры и хранение.
+   ============================================================ */
+const isChannel    = id => CHANNEL_ID    !== null && Number(id) === CHANNEL_ID;
+const isDiscussion = id => DISCUSSION_ID !== null && Number(id) === DISCUSSION_ID;
+
+/* id того, кому вообще можно что-то начислить: боты мимо, анонимная реакция
+   от лица канала приходит без user — привязывать её не к кому */
+function payee(user){
+  if(!user || user.is_bot) return null;
+  const id = String(user.id || '');
+  return /^\d+$/.test(id) ? id : null;
+}
+function engAward(user, rule, subject){
+  const id = payee(user);
+  if(!id) return null;
+  const res = ENG.award(engagement.get(id) || ENG.emptyLedger(), {rule, userId: id, subject});
+  if(!res.ok) return null;
+  engagement.set(id, res.ledger);
+  console.log(`+${res.event.points} ${rule} → ${id} (итого ${res.ledger.points})`);
+  return res;
+}
+function engRevoke(user, rule, subject){
+  const id = payee(user);
+  if(!id) return null;
+  const res = ENG.revoke(engagement.get(id) || ENG.emptyLedger(), {rule, userId: id, subject});
+  if(!res.ok) return null;
+  engagement.set(id, res.ledger);
+  console.log(`−${res.points} ${rule} → ${id} (итого ${res.ledger.points})`);
+  return res;
+}
+const engagementOf = id => engagement.get(String(id)) || ENG.emptyLedger();
+
+/* подписка на канал: статус сменился на «в чате» из «не в чате».
+   Начисляем тому, чей статус изменился, а не тому, кто изменил. */
+bot.on('chat_member', ctx => {
+  const upd = ctx.chatMember;
+  if(!isChannel(upd.chat.id)) return;
+  const was = upd.old_chat_member.status, now = upd.new_chat_member.status;
+  const out = s => s === 'left' || s === 'kicked';
+  const inside = s => s === 'member' || s === 'administrator' || s === 'creator';
+  if(out(was) && inside(now)) engAward(upd.new_chat_member.user, 'join');
+});
+
+/* реакция на пост. Анонимная реакция от лица канала приходит без user —
+   привязать её не к кому, просто пропускаем. */
+bot.on('message_reaction', ctx => {
+  const r = ctx.messageReaction;
+  if(!isChannel(r.chat.id)) return;
+  if(!r.new_reaction || !r.new_reaction.length) return;     // реакцию сняли — не платим и не отнимаем
+  engAward(r.user, 'reaction', r.message_id);
+});
+
+bot.on('chat_boost', ctx => {
+  const b = ctx.chatBoost;
+  if(!isChannel(b.chat.id)) return;
+  engAward(b.boost.source && b.boost.source.user, 'boost', b.boost.boost_id);
+});
+bot.on('removed_chat_boost', ctx => {
+  const b = ctx.removedChatBoost;
+  if(!isChannel(b.chat.id)) return;
+  engRevoke(b.source && b.source.user, 'boost', b.boost_id);
+});
+
+/* комментарий в привязанной группе обсуждений. Пока DISCUSSION_ID не задан,
+   этот обработчик не срабатывает ни разу. Автопересылка поста из канала
+   приходит сюда же — она не от человека, её отсекает sender_chat. */
+bot.on('message', ctx => {
+  const m = ctx.message;
+  if(!isDiscussion(m.chat.id)) return;
+  if(m.sender_chat || m.is_automatic_forward) return;
+  engAward(ctx.from, 'comment', m.message_id);
+});
+
 bot.catch(err => console.error('bot error:', err));
 
 /* ============================ API ============================ */
@@ -267,6 +374,21 @@ app.post('/api/state', (req, res) => {
     refs: refsOf(u), invitedBy: u.invitedBy || null,
     betaOpen, prices: PRICES, currency: CURRENCY,
     payments: PROVIDER_TOKEN ? 'on' : 'off'
+  });
+});
+
+/* Баллы за активность в канале. Отдаём только свои: чужой ledger по этому
+   эндпоинту не достать, id берётся из подписанной initData, а не из тела.
+   tracking:'off' — бот не знает канала (CHANNEL_ID пуст), клиенту нужно
+   сказать это честно, а не показывать ноль как достижение. */
+app.post('/api/engagement', (req, res) => {
+  const tg = auth(req, res); if(!tg) return;
+  const led = engagementOf(tg.id);
+  res.json({
+    points: led.points,
+    events: led.events.slice(-20).reverse(),
+    tracking: CHANNEL_ID ? 'on' : 'off',
+    discussion: DISCUSSION_ID ? 'on' : 'off'
   });
 });
 
@@ -384,10 +506,22 @@ app.post('/api/admin/tester', (req, res) => {
 
 app.get('/health', (_, res) => res.json({
   ok: true, users: users.size, payments: payments.length,
-  provider: PROVIDER_TOKEN ? 'on' : 'off', admins: ADMINS.length
+  provider: PROVIDER_TOKEN ? 'on' : 'off', admins: ADMINS.length,
+  channel: CHANNEL_ID ? 'on' : 'off', engaged: engagement.size
 }));
 
-app.listen(PORT, () => console.log(`API на :${PORT}`));
-/* Если токен неверный, падать целиком незачем: API уже поднят и ошибка
-   должна быть видна в логах хостинга, а не в тишине. */
-bot.start().catch(err => console.error('бот не запустился (проверь BOT_TOKEN):', err.message));
+/* Поднимаем сеть только когда файл запущен напрямую. Автотесты импортируют
+   этот модуль, чтобы скормить боту синтетические апдейты — им ни порт,
+   ни long polling не нужны. */
+const isEntry = process.argv[1] &&
+  pathToFileURL(process.argv[1]).href === import.meta.url;
+
+if(isEntry){
+  app.listen(PORT, () => console.log(`API на :${PORT}`));
+  /* Если токен неверный, падать целиком незачем: API уже поднят и ошибка
+     должна быть видна в логах хостинга, а не в тишине. */
+  bot.start({ allowed_updates: ALLOWED_UPDATES })
+     .catch(err => console.error('бот не запустился (проверь BOT_TOKEN):', err.message));
+}
+
+export { bot, app, ALLOWED_UPDATES, engagementOf, users, upsert };

@@ -20,6 +20,8 @@
 <script src="config.js"></script>
 <!-- Экономика: пороги узлов, тарифы, расчёт цены. Тот же файл считает цену в юнит-тестах. -->
 <script src="economy.js"></script>
+<!-- Баллы за активность в канале. Тот же файл начисляет их на бэкенде. -->
+<script src="engagement.js"></script>
 <style>
 /* ============================================================
    RIZZOMA — Mini App «дерево узлов»
@@ -391,6 +393,15 @@ html.reduce .boot__hint{opacity:.7;animation:none}
 .mate__btn{border:1px solid var(--line-strong);padding:8px 10px;
   font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
 .mate__btn:hover{border-color:var(--accent-toxic);color:var(--accent-toxic)}
+/* активность в канале: сумма баллов и последние начисления */
+.eng{border:1px solid var(--line);background:var(--bg-raised);padding:var(--s2)}
+.eng__sum{display:flex;align-items:baseline;gap:8px}
+.eng__sum b{font-family:var(--f-mono);font-weight:500;font-size:30px;color:var(--accent-toxic);line-height:1}
+.eng__list{list-style:none;margin:var(--s2) 0 0;padding:0;display:grid;gap:1px;background:var(--line)}
+.eng__list li{background:var(--bg-raised);display:flex;justify-content:space-between;gap:var(--s2);
+  padding:7px 0;font-size:13px;color:var(--ink-muted)}
+.eng__list b{font-family:var(--f-mono);font-weight:500;color:var(--accent-toxic)}
+.eng__none{margin:10px 0 0;color:var(--ink-muted);font-size:13px}
 .gate{border:1px solid var(--line-strong);background:var(--bg-raised);padding:var(--s2);
   display:grid;gap:10px;margin-top:var(--s3)}
 .gate h4{font-family:var(--f-display);font-weight:700;text-transform:uppercase;letter-spacing:-0.02em;
@@ -682,6 +693,10 @@ applyReduce();
 const K_DB='rizzoma_mock_db', K_ME='rizzoma_me', K_ATTR='rizzoma_attribution', K_CLAIMS='rizzoma_claims';
 const ATTR_TTL = 30*24*60*60*1000;
 const CLOUD_KEYS = [K_DB, K_ME, K_ATTR, K_CLAIMS];
+/* Баллы за канал — демо-уровень и хранятся локально: ключ намеренно НЕ в
+   CLOUD_KEYS, как и rizzoma_beta. Считает их всё равно бэкенд, здесь только
+   кэш последнего ответа, чтобы показать сумму до и без сети. */
+const K_ENG = 'rizzoma_engagement';
 
 const cloudPush = (k, v) => {
   const c = TG.cloud();
@@ -2723,6 +2738,36 @@ function applyServerState(s){
   renderAll();                       // renderAll сам покажет тост про новый узел
 }
 
+/* ---------- баллы за активность в канале ----------
+   Считает их бот: реакции, подписки и бусты прилетают ему апдейтами, а не
+   в браузер. Клиент только забирает свою сумму и кладёт в localStorage —
+   демо-уровень, ровно как остальная экономика беты. */
+const ENG = window.RIZZOMA_ENGAGEMENT;
+let engData = (() => {
+  const raw = ls0(K_ENG);
+  if(!raw) return null;
+  try { const d = JSON.parse(raw); return (d && typeof d.points === 'number') ? d : null; }
+  catch(e){ return null; }
+})();
+function saveEng(d){
+  engData = d;
+  try { localStorage.setItem(K_ENG, JSON.stringify(d)); } catch(e){}
+}
+async function engagementFetch(){
+  if(!API || !TG.on) return null;
+  try {
+    const r = await fetch(API + '/api/engagement', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({initData: WA.initData})
+    });
+    if(!r.ok) return null;
+    const j = await r.json();
+    if(!j || typeof j.points !== 'number') return null;
+    return {points: j.points, events: Array.isArray(j.events) ? j.events : [],
+            tracking: j.tracking || 'off', ts: Date.now()};
+  } catch(e){ return null; }
+}
+
 async function crewFetch(){
   if(!CFG.apiBase || !TG.on) return null;
   try {
@@ -2772,6 +2817,35 @@ function crewGate(){
     </div>`;
   return '';
 }
+/* Блок «активность в канале». Пустое состояние объясняет причину, а не
+   показывает ноль как достижение: ноль баллов и «бот пока не считает» —
+   разные вещи, и тестер должен их различать. */
+function engBlock(){
+  const why = !TG.on ? 'Баллы считаются внутри Telegram'
+            : !API   ? 'Бэкенд не подключён'
+            : (engData && engData.tracking === 'off') ? 'Бот ещё не следит за каналом'
+            : null;
+  if(why || !engData) return `
+    <div class="crew__sub"><span class="mono muted">Активность в канале</span></div>
+    <div class="empty">${esc(why || 'Данных пока нет')}</div>`;
+
+  const ev = (engData.events || []).slice(0, 4);
+  return `
+    <div class="crew__sub">
+      <span class="mono muted">Активность в канале</span>
+      <span class="mono muted">${esc(CFG.bot ? '@' + CFG.bot : 'бот')}</span>
+    </div>
+    <div class="eng">
+      <div class="eng__sum">
+        <b>${engData.points}</b>
+        <span class="mono muted">${plural(engData.points,'балл','балла','баллов')}</span>
+      </div>
+      ${ev.length ? `<ul class="eng__list">${ev.map(e => `
+        <li><span>${esc(ENG.labelOf(e.rule))}</span><b>+${+e.points || 0}</b></li>`).join('')}</ul>`
+      : `<p class="eng__none">Подпишись на канал и поставь реакцию — баллы появятся здесь.</p>`}
+    </div>`;
+}
+
 function renderCrew(fresh){
   const body = $('#crewBody'); if(!body) return;
   const u = myUser();
@@ -2803,6 +2877,7 @@ function renderCrew(fresh){
     </article>`;
 
   body.innerHTML = `
+    ${engBlock()}
     ${going.length ? `
       <div class="crew__sub"><span class="mono muted">Уже идут</span><span class="mono muted">${going.length}</span></div>
       <div class="crew">${going.map(m => card(m,'going')).join('')}</div>` : `
@@ -3203,7 +3278,8 @@ if(TG.on && API){
   }).catch(()=>{})
     .then(() => stateFetch())
     .then(s => { if(s) applyServerState(s); return crewFetch(); })
-    .then(list => { if(list){ crewRemote = list; renderCrew(); } })
+    .then(list => { if(list){ crewRemote = list; renderCrew(); } return engagementFetch(); })
+    .then(eng => { if(eng){ saveEng(eng); renderCrew(); } })
     .catch(()=>{});
 }
 })();
